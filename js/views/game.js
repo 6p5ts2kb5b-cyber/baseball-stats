@@ -4,9 +4,19 @@
 import * as store from "../store.js";
 import { state } from "../store.js";
 import { esc, $, $$, toast, sheet, closeSheet, player, pname, tname, activePlayers, numberOf, HAND } from "../ui.js";
-import { gameState, gameResult, gameMisc, pitcherLines, batting, R, RESULTS, itemOuts, fmtAvg } from "../stats.js";
+import { gameState, gameResult, gameMisc, pitcherLines, batting, R, RESULTS, itemOuts, fmtAvg, fmtPct } from "../stats.js";
 
 const EVTEXT = { sb: "盗塁", cs: "盗塁死", po: "牽制アウト", run: "走者生還", out: "アウト", e: "失策", wp: "暴投", pb: "捕逸" };
+
+// 1試合の打撃成績の列（画面と印刷で共通）
+export const GAME_COLS = [
+  ["打席", (b) => b.pa], ["打数", (b) => b.ab], ["安打", (b) => b.h], ["二塁打", (b) => b.s2], ["三塁打", (b) => b.s3], ["本塁打", (b) => b.hr],
+  ["打点", (b) => b.rbi], ["三振", (b) => b.k], ["四球", (b) => b.bb], ["死球", (b) => b.hbp],
+  ["犠打", (b) => b.sac], ["犠飛", (b) => b.sf], ["進塁打", (b) => b.adv], ["盗塁", (b) => b.sb], ["盗塁死", (b) => b.cs], ["失策", (b) => b.e],
+];
+const zero = (v) => (v ? v : `<span class="z">0</span>`);
+export const gameCells = (b) => GAME_COLS.map(([, f]) => `<td>${zero(f(b))}</td>`).join("");
+export const gameHeads = () => GAME_COLS.map(([l]) => `<th>${l}</th>`).join("");
 
 export function itemText(it, g) {
   const where = `${it.inn}回${it.half === "T" ? "表" : "裏"}`;
@@ -43,8 +53,8 @@ export function pitcherTable(g, editable) {
   const { lines } = pitcherLines(g, state.settings);
   const arr = Object.values(lines).sort((a, b) => (b.starter ? 1 : 0) - (a.starter ? 1 : 0));
   if (!arr.length) return `<p class="muted">守備の記録がまだありません。</p>`;
-  return `<div class="tablewrap"><table><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>暴投</th><th>失点</th><th>自責</th><th>QS</th></tr></thead><tbody>
-    ${arr.map((L) => `<tr><td class="l">${pname(L.pid)}${L.starter ? ' <span class="muted small">先発</span>' : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td>${L.pitches}</td><td>${L.h}</td><td>${L.k}</td><td>${L.bb + L.hbp}</td><td>${L.wp}</td>
+  return `<div class="tablewrap"><table><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>ストライク率</th><th>初球S率</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>暴投</th><th>失点</th><th>自責</th><th>QS</th></tr></thead><tbody>
+    ${arr.map((L) => `<tr><td class="l">${pname(L.pid)}${L.starter ? ' <span class="muted small">先発</span>' : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td><b>${L.pitches}</b></td><td>${fmtPct(L.strikePct)}</td><td>${fmtPct(L.fpsPct)}</td><td>${L.h}</td><td>${L.k}</td><td>${L.bb + L.hbp}</td><td>${L.wp}</td>
       <td>${editable ? `<input type="number" min="0" style="width:64px;min-height:34px;padding:4px" data-adj="runs" data-pid="${L.pid}" value="${L.runs}">` : L.runs}</td>
       <td>${editable ? `<input type="number" min="0" style="width:64px;min-height:34px;padding:4px" data-adj="er" data-pid="${L.pid}" value="${L.er}">` : L.er}</td>
       <td>${L.starter ? (L.qs ? '<span class="chip qs">QS ○</span>' : '<span class="chip">×</span>') : "-"}</td></tr>`).join("")}
@@ -76,8 +86,9 @@ export function viewGame(id) {
     <h2>投手成績</h2>
     ${pitcherTable(g, canWrite)}
     <h2>打撃成績</h2>
-    <div class="tablewrap"><table><thead><tr><th class="l">打順・選手</th><th class="l">結果</th><th>打席</th><th>打数</th><th>安打</th><th>打点</th><th>三振</th><th>四死球</th><th>盗塁</th></tr></thead><tbody>
-      ${bat.map(({ pid, b, line }) => `<tr><td class="l">${(g.lineup || []).indexOf(pid) >= 0 ? (g.lineup.indexOf(pid) + 1) + ". " : ""}<a href="#/player/${pid}">${pname(pid)}</a></td><td class="l">${line.join(" ")}</td><td>${b.pa}</td><td>${b.ab}</td><td>${b.h}</td><td>${b.rbi}</td><td>${b.k}</td><td>${b.bb + b.hbp}</td><td>${b.sb}</td></tr>`).join("")}
+    <div class="tablewrap"><table><thead><tr><th class="l">打順・選手</th><th class="l">結果</th>${gameHeads()}</tr></thead><tbody>
+      ${bat.map(({ pid, b, line }) => `<tr><td class="l">${(g.lineup || []).indexOf(pid) >= 0 ? (g.lineup.indexOf(pid) + 1) + ". " : ""}<a href="#/player/${pid}">${pname(pid)}</a></td><td class="l">${line.join(" ")}</td>${gameCells(b)}</tr>`).join("")}
+      <tr class="total"><td class="l">チーム計</td><td></td>${gameCells(batting([g], null, state.settings))}</tr>
     </tbody></table></div>
     ${canWrite ? `<h2>試合後に入れる記録（盗塁・失策）</h2>
     <p class="muted small">試合中に入れられなかった盗塁や、守備の失策数を選手ごとに足せます。</p>

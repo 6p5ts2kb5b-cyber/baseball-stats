@@ -7,7 +7,7 @@
 import { state } from "../store.js";
 import { esc, $, $$, player, numberOf, gradeText, activePlayers, filterBar, bindFilter, loadFilter, filteredGames, filterLabel, tname, HAND, liveGames, byDate, today } from "../ui.js";
 import { batting, pitching, pitcherLines, gameResult, seasonOf, filterGames, fmtAvg, fmtPct, fmtNum, R } from "../stats.js";
-import { scoreboard } from "./game.js";
+import { scoreboard, gameCells, gameHeads } from "./game.js";
 
 const F = loadFilter();
 const opt = { who: "all", pitch: true, games: true, season: true };
@@ -85,8 +85,8 @@ function playerPage(p, gs) {
     </div>
     ${opt.games && rows.length ? `<h3>試合ごとの成績</h3>
       ${rows.length >= 2 ? trendSvg(rows) : ""}
-      <table class="pt"><thead><tr><th class="l">日付</th><th class="l">相手</th><th class="l">結果</th><th>打数</th><th>安打</th><th>打点</th><th>三振</th><th>四死球</th><th>累計打率</th></tr></thead><tbody>
-      ${rows.map((r) => `<tr><td class="l">${esc((r.g.date || "").slice(5).replace("-", "/"))}</td><td class="l">${esc(r.g.opponent || "")}</td><td class="l">${esc(r.res)}</td><td>${r.gb.ab}</td><td>${r.gb.h}</td><td>${r.gb.rbi}</td><td>${r.gb.k}</td><td>${r.gb.bb + r.gb.hbp}</td><td>${fmtAvg(r.cum)}</td></tr>`).join("")}
+      <table class="pt"><thead><tr><th class="l">日付</th><th class="l">相手</th><th class="l">結果</th><th>打数</th><th>安打</th><th>本塁打</th><th>打点</th><th>三振</th><th>四死球</th><th>犠打</th><th>進塁打</th><th>盗塁</th><th>失策</th><th>累計打率</th></tr></thead><tbody>
+      ${rows.map((r) => `<tr><td class="l">${esc((r.g.date || "").slice(5).replace("-", "/"))}</td><td class="l">${esc(r.g.opponent || "")}</td><td class="l">${esc(r.res)}</td><td>${r.gb.ab}</td><td>${r.gb.h}</td><td>${r.gb.hr}</td><td>${r.gb.rbi}</td><td>${r.gb.k}</td><td>${r.gb.bb + r.gb.hbp}</td><td>${r.gb.sac}</td><td>${r.gb.adv}</td><td>${r.gb.sb}</td><td>${r.gb.e}</td><td>${fmtAvg(r.cum)}</td></tr>`).join("")}
       </tbody></table>` : ""}
     ${pitched ? pitcherPart(p.id, gs, pit) : ""}
   </section>`;
@@ -120,8 +120,8 @@ function pitcherPart(pid, gs, pit) {
     <div class="pcols">
       <div><table class="pt"><thead><tr><th class="l"></th><th>打者</th><th>打数</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>被打率</th></tr></thead><tbody>
         ${lr("対右打者", pit.vsR)}${lr("対左打者", pit.vsL)}</tbody></table></div>
-      <div><table class="pt"><thead><tr><th class="l">試合</th><th>投球回</th><th>球数</th><th>奪三振</th><th>自責</th><th>QS</th></tr></thead><tbody>
-        ${games.map((g) => { const L = pitcherLines(g, state.settings).lines[pid]; return `<tr><td class="l">${esc((g.date || "").slice(5).replace("-", "/"))} ${esc(g.opponent || "")}</td><td>${L.ipText}</td><td>${L.pitches}</td><td>${L.k}</td><td>${L.er}</td><td>${L.starter ? (L.qs ? "○" : "×") : "-"}</td></tr>`; }).join("")}
+      <div><table class="pt"><thead><tr><th class="l">試合</th><th>投球回</th><th>打者</th><th>球数</th><th>S率</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>自責</th><th>QS</th></tr></thead><tbody>
+        ${games.map((g) => { const L = pitcherLines(g, state.settings).lines[pid]; return `<tr><td class="l">${esc((g.date || "").slice(5).replace("-", "/"))} ${esc(g.opponent || "")}</td><td>${L.ipText}</td><td>${L.bf}</td><td><b>${L.pitches}</b></td><td>${fmtPct(L.strikePct)}</td><td>${L.h}</td><td>${L.k}</td><td>${L.bb + L.hbp}</td><td>${L.er}</td><td>${L.starter ? (L.qs ? "○" : "×") : "-"}</td></tr>`; }).join("")}
       </tbody></table></div>
     </div>`;
 }
@@ -155,21 +155,22 @@ export function viewGamePrint(id) {
         <div class="small" style="text-align:right">${esc(g.date)}<br>${esc(tname(g.tournamentId))}・${g.first !== false ? "先攻" : "後攻"}</div></header>
       ${scoreboard(g)}
       <h3>投手成績</h3>
-      <table class="pt"><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>暴投</th><th>失点</th><th>自責</th><th>QS</th>${opt.season ? `<th>通算QS</th><th>通算被打率</th>` : ""}</tr></thead><tbody>
-        ${plist.map((L) => { const s = opt.season ? pitching(upto, L.pid, state.settings) : null; return `<tr><td class="l">${esc(player(L.pid)?.name || "?")}${L.starter ? "（先発）" : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td>${L.pitches}</td><td>${L.h}</td><td>${L.k}</td><td>${L.bb + L.hbp}</td><td>${L.wp}</td><td>${L.runs}</td><td>${L.er}</td><td>${L.starter ? (L.qs ? "<b>QS ○</b>" : "×") : "-"}</td>${s ? `<td>${s.qs}/${s.gs}</td><td>${fmtAvg(s.oppAvg)}</td>` : ""}</tr>`; }).join("") || `<tr><td class="l" colspan="10">記録なし</td></tr>`}
+      <table class="pt"><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>S率</th><th>初球S率</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>暴投</th><th>失点</th><th>自責</th><th>QS</th>${opt.season ? `<th>通算QS</th><th>通算被打率</th>` : ""}</tr></thead><tbody>
+        ${plist.map((L) => { const s = opt.season ? pitching(upto, L.pid, state.settings) : null; return `<tr><td class="l">${esc(player(L.pid)?.name || "?")}${L.starter ? "（先発）" : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td><b>${L.pitches}</b></td><td>${fmtPct(L.strikePct)}</td><td>${fmtPct(L.fpsPct)}</td><td>${L.h}</td><td>${L.k}</td><td>${L.bb + L.hbp}</td><td>${L.wp}</td><td>${L.runs}</td><td>${L.er}</td><td>${L.starter ? (L.qs ? "<b>QS ○</b>" : "×") : "-"}</td>${s ? `<td>${s.qs}/${s.gs}</td><td>${fmtAvg(s.oppAvg)}</td>` : ""}</tr>`; }).join("") || `<tr><td class="l" colspan="10">記録なし</td></tr>`}
       </tbody></table>
       <p class="muted tiny">QS：先発で${Math.floor(state.settings.qs.minOuts / 3)}回以上・自責点${state.settings.qs.maxER}以下　相手投手：${esc(g.oppPitcher?.name || "")}（${HAND[g.oppPitcher?.hand] || "右"}投）</p>
       <h3>打撃成績</h3>
-      <table class="pt"><thead><tr><th class="l">打順</th><th class="l">選手</th><th class="l">結果</th><th>打席</th><th>打数</th><th>安打</th><th>打点</th><th>三振</th><th>四死球</th><th>盗塁</th>
+      <table class="pt wide"><thead><tr><th class="l">打順</th><th class="l">選手</th><th class="l">結果</th>${gameHeads()}
         ${opt.season ? `<th class="sep">通算打率</th><th>通算OPS</th><th>通算安打</th><th>通算打点</th><th>通算本塁打</th>` : ""}</tr></thead><tbody>
         ${ids.map((pid) => {
           const b = batting([g], pid, state.settings);
           const s = opt.season ? batting(upto, pid, state.settings) : null;
           const res = (g.log || []).filter((i) => i.k === "pa" && i.side === "off" && i.batter === pid).map((i) => R[i.res]?.short || "").join(" ");
           const slot = (g.lineup || []).indexOf(pid);
-          return `<tr><td class="l">${slot >= 0 ? slot + 1 : ""}</td><td class="l">${esc(player(pid)?.name || "?")}</td><td class="l">${esc(res)}</td><td>${b.pa}</td><td>${b.ab}</td><td>${b.h}</td><td>${b.rbi}</td><td>${b.k}</td><td>${b.bb + b.hbp}</td><td>${b.sb}</td>
+          return `<tr><td class="l">${slot >= 0 ? slot + 1 : ""}</td><td class="l">${esc(player(pid)?.name || "?")}</td><td class="l">${esc(res)}</td>${gameCells(b)}
             ${s ? `<td class="sep">${fmtAvg(s.avg)}</td><td>${fmtAvg(s.ops)}</td><td>${s.h}</td><td>${s.rbi}</td><td>${s.hr}</td>` : ""}</tr>`;
         }).join("")}
+        <tr class="total"><td class="l"></td><td class="l">チーム計</td><td></td>${gameCells(batting([g], null, state.settings))}${opt.season ? `<td class="sep" colspan="5"></td>` : ""}</tr>
       </tbody></table>
       <p class="muted tiny">結果の記号：安＝単打 二＝二塁打 三＝三塁打 本＝本塁打 ゴ＝ゴロ 飛＝フライ 直＝ライナー 併＝併殺打 振＝三振 失＝失策 野＝野選 四＝四球 死＝死球 犠＝犠打 犠飛＝犠飛 進＝進塁打</p>
     </section>`;

@@ -383,13 +383,16 @@ export function pitcherLines(game, settings) {
   const S = mergeSettings(settings);
   const lines = {};
   let starter = null;
-  const get = (pid) => (lines[pid] = lines[pid] || { pid, outs: 0, runs: 0, er: 0, bf: 0, pitches: 0, k: 0, h: 0, bb: 0, hbp: 0, wp: 0 });
+  const get = (pid) => (lines[pid] = lines[pid] || { pid, outs: 0, runs: 0, er: 0, bf: 0, pitches: 0, strikes: 0, fpN: 0, fpS: 0, k: 0, h: 0, bb: 0, hbp: 0, wp: 0 });
   for (const it of game.log || []) {
     if (it.side !== "def" || !it.pitcher) continue;
     const L = get(it.pitcher);
     if (it.k === "pa" && R[it.res]) {
       if (!starter) starter = it.pitcher;
       L.bf++; L.pitches += (it.p || "").length;
+      const seq = (it.p || "").toUpperCase();
+      for (const ch of seq) if (PITCHES[ch]?.strike) L.strikes++;
+      if (seq.length) { L.fpN++; if (PITCHES[seq[0]]?.strike) L.fpS++; }
       if (R[it.res].hit) L.h++;
       if (it.res === "K") L.k++;
       if (it.res === "BB") L.bb++;
@@ -410,6 +413,8 @@ export function pitcherLines(game, settings) {
   for (const L of Object.values(lines)) {
     L.starter = L.pid === starter;
     L.qs = L.starter && L.outs >= S.qs.minOuts && L.er <= S.qs.maxER;
+    L.strikePct = div(L.strikes, L.pitches);
+    L.fpsPct = div(L.fpS, L.fpN);
     const whole = Math.floor(L.outs / 3), frac = L.outs % 3;
     L.ipText = frac ? (whole ? whole + "回" : "") + frac + "/3" : whole + "回";
   }

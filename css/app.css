@@ -276,3 +276,8 @@ svg.trend .ax.strong { fill: var(--ink); font-weight: 700; font-size: 12px; }
   .rk tr.top td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .rk { break-inside: avoid; }
 }
+
+/* 0 は薄く表示（数字のある所が目立つように） */
+.z { opacity: .35; }
+table.pt.wide { font-size: 11px; }
+@media print { table.pt.wide { font-size: 8.5pt; } table.pt.wide th, table.pt.wide td { padding: 3px 3px; } table.pt.wide th { white-space: normal; line-height: 1.15; } }

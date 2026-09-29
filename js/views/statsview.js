@@ -136,8 +136,8 @@ export function viewPlayer(pid) {
       <h3>カウント別被打率</h3>
       ${countGrid(pit.byCount, "被打率")}
       <h3>登板した試合</h3>
-      <div class="tablewrap"><table><thead><tr><th class="l">試合</th><th>投球回</th><th>打者</th><th>球数</th><th>被安打</th><th>奪三振</th><th>失点</th><th>自責</th><th>QS</th></tr></thead><tbody>
-        ${pgames.map((g) => { const L = pitcherLines(g, state.settings).lines[pid]; return `<tr><td class="l"><a href="#/game/${g.id}">第${g.no}試合 vs ${esc(g.opponent)}</a>${L.starter ? ' <span class="muted small">先発</span>' : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td>${L.pitches}</td><td>${L.h}</td><td>${L.k}</td><td>${L.runs}</td><td>${L.er}</td><td>${L.starter ? (L.qs ? '<span class="chip qs">QS ○</span>' : "×") : "-"}</td></tr>`; }).join("")}
+      <div class="tablewrap"><table><thead><tr><th class="l">試合</th><th>投球回</th><th>打者</th><th>球数</th><th>S率</th><th>初球S率</th><th>被安打</th><th>奪三振</th><th>失点</th><th>自責</th><th>QS</th></tr></thead><tbody>
+        ${pgames.map((g) => { const L = pitcherLines(g, state.settings).lines[pid]; return `<tr><td class="l"><a href="#/game/${g.id}">第${g.no}試合 vs ${esc(g.opponent)}</a>${L.starter ? ' <span class="muted small">先発</span>' : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td><b>${L.pitches}</b></td><td>${fmtPct(L.strikePct)}</td><td>${fmtPct(L.fpsPct)}</td><td>${L.h}</td><td>${L.k}</td><td>${L.runs}</td><td>${L.er}</td><td>${L.starter ? (L.qs ? '<span class="chip qs">QS ○</span>' : "×") : "-"}</td></tr>`; }).join("")}
       </tbody></table></div>` : ""}`;
   return { html, after: (root) => bindFilter(root, F, rerender) };
 }
