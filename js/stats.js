@@ -46,6 +46,7 @@ export const DEFAULT_SETTINGS = {
   teamName: "野球部",
   innings: 7, // 奪三振率の換算イニング（中学は7回制）
   qs: { minOuts: 15, maxER: 2 }, // QS：5回(15アウト)以上・自責点2以下
+  qual: { paPerGame: 2, ipPerGame: 1 }, // ランキングの規定：打席＝試合数×2、投球回＝試合数×1
   // 打数に含めるか（チーム独自ルール：犠飛・進塁打は含めない）
   abRules: Object.fromEntries(RESULTS.map((r) => [r.c, r.ab])),
   tournaments: [
@@ -60,6 +61,7 @@ export function mergeSettings(s) {
   return {
     ...d, ...s,
     qs: { ...d.qs, ...(s.qs || {}) },
+    qual: { ...d.qual, ...(s.qual || {}) },
     abRules: { ...d.abRules, ...(s.abRules || {}) },
     tournaments: s.tournaments && s.tournaments.length ? s.tournaments : d.tournaments,
   };
@@ -208,6 +210,19 @@ export function gameState(game) {
   return { inn, half, outs, runners, score, line, nextSlot, hits, side: sideOf(game, half) };
 }
 
+// 1試合の失策・暴投・捕逸（us=自チームが犯した数、them=相手が犯した数）
+export function gameMisc(game) {
+  const m = { us: { e: 0, wp: 0, pb: 0 }, them: { e: 0, wp: 0, pb: 0 } };
+  for (const it of game.log || []) {
+    const who = it.side === "def" ? "us" : "them"; // 守備中のミスは自チーム、攻撃中は相手
+    if ((it.k === "ev" && it.type === "e") || (it.k === "pa" && it.res === "E")) m[who].e++;
+    if (it.k === "ev" && it.type === "wp") m[who].wp++;
+    if (it.k === "ev" && it.type === "pb") m[who].pb++;
+  }
+  for (const x of Object.values(game.extras || {})) m.us.e += +x.e || 0;
+  return m;
+}
+
 export function gameResult(game) {
   const st = gameState(game);
   const us = st.score.us, them = st.score.them;
@@ -233,7 +248,7 @@ export function filterGames(games, f = {}) {
 // ---- 打者成績 --------------------------------------------------------
 function emptyBat() {
   return { g: 0, pa: 0, ab: 0, h: 0, s1: 0, s2: 0, s3: 0, hr: 0, tb: 0, k: 0, bb: 0, hbp: 0,
-    sac: 0, sf: 0, adv: 0, rbi: 0, r: 0, sb: 0, cs: 0, e: 0, pitches: 0 };
+    sac: 0, sf: 0, adv: 0, rbi: 0, r: 0, sb: 0, cs: 0, e: 0, pb: 0, pitches: 0 };
 }
 function addBat(L, pa, rules) {
   const r = R[pa.res];
@@ -308,8 +323,15 @@ export function batting(games, pid, settings) {
       if (it.type === "cs" || it.type === "po") L.cs++;
       if (it.type === "run" && it.runner) L.r++;
     }
-    const x = pid ? (g.extras || {})[pid] : null;
-    if (x) {
+    // 守備：失策（試合中の記録・失策出塁の打席）と捕逸
+    for (const it of g.log || []) {
+      if (it.side !== "def") continue;
+      const isErr = (it.k === "ev" && it.type === "e") || (it.k === "pa" && it.res === "E");
+      if (isErr && (!pid || it.fielder === pid)) L.e++;
+      if (it.k === "ev" && it.type === "pb" && (!pid || it.catcher === pid)) L.pb++;
+    }
+    const xs = pid ? [(g.extras || {})[pid]].filter(Boolean) : Object.values(g.extras || {});
+    for (const x of xs) {
       L.sb += +x.sb || 0; L.cs += +x.cs || 0; L.e += +x.e || 0; L.r += +x.r || 0;
     }
     if (pid && (g.lineup || []).includes(pid)) played.add(g.id);
@@ -326,7 +348,7 @@ export function batting(games, pid, settings) {
 // ---- 投手成績 --------------------------------------------------------
 function emptyPit() {
   return { g: 0, gs: 0, qs: 0, bf: 0, ab: 0, h: 0, hr: 0, k: 0, bb: 0, hbp: 0, outs: 0,
-    runs: 0, er: 0, pitches: 0, strikes: 0, fpN: 0, fpS: 0 };
+    runs: 0, er: 0, wp: 0, pitches: 0, strikes: 0, fpN: 0, fpS: 0 };
 }
 function addPit(P, pa, rules) {
   const r = R[pa.res]; if (!r) return;
@@ -361,7 +383,7 @@ export function pitcherLines(game, settings) {
   const S = mergeSettings(settings);
   const lines = {};
   let starter = null;
-  const get = (pid) => (lines[pid] = lines[pid] || { pid, outs: 0, runs: 0, er: 0, bf: 0, pitches: 0, k: 0, h: 0, bb: 0, hbp: 0 });
+  const get = (pid) => (lines[pid] = lines[pid] || { pid, outs: 0, runs: 0, er: 0, bf: 0, pitches: 0, k: 0, h: 0, bb: 0, hbp: 0, wp: 0 });
   for (const it of game.log || []) {
     if (it.side !== "def" || !it.pitcher) continue;
     const L = get(it.pitcher);
@@ -376,6 +398,7 @@ export function pitcherLines(game, settings) {
       L.er += it.er != null ? Number(it.er) || 0 : Number(it.runs) || 0;
     }
     if (it.k === "ev" && it.type === "run") { L.runs += 1; if (it.er !== false) L.er += 1; }
+    if (it.k === "ev" && it.type === "wp") L.wp += 1;
     L.outs += itemOuts(it);
   }
   // 試合後に手で直した失点・自責点があれば優先
@@ -412,7 +435,7 @@ export function pitching(games, pid, settings) {
     const L = lines[pid];
     if (L) {
       did = true;
-      P.outs += L.outs; P.runs += L.runs; P.er += L.er;
+      P.outs += L.outs; P.runs += L.runs; P.er += L.er; P.wp += L.wp;
       if (L.starter) { P.gs++; if (L.qs) P.qs++; }
     }
     if (did) P.g++;

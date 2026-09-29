@@ -71,8 +71,9 @@ function playerPage(p, gs) {
     <div class="ptiles">
       ${[["打率", fmtAvg(b.avg)], ["OPS", fmtAvg(b.ops)], ["安打", b.h], ["打点", b.rbi], ["本塁打", b.hr], ["盗塁", b.sb], ["得点圏打率", fmtAvg(b.risp.avg)]].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("")}
     </div>
-    <table class="pt"><thead><tr><th>試合</th><th>打席</th><th>打数</th><th>安打</th><th>二塁打</th><th>三塁打</th><th>本塁打</th><th>打点</th><th>三振</th><th>四球</th><th>死球</th><th>犠打</th><th>犠飛</th><th>進塁打</th><th>盗塁</th><th>出塁率</th><th>長打率</th></tr></thead>
-      <tbody><tr><td>${b.g}</td><td>${b.pa}</td><td>${b.ab}</td><td>${b.h}</td><td>${b.s2}</td><td>${b.s3}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.k}</td><td>${b.bb}</td><td>${b.hbp}</td><td>${b.sac}</td><td>${b.sf}</td><td>${b.adv}</td><td>${b.sb}</td><td>${fmtAvg(b.obp)}</td><td>${fmtAvg(b.slg)}</td></tr></tbody></table>
+    <table class="pt"><thead><tr><th>試合</th><th>打席</th><th>打数</th><th>安打</th><th>二塁打</th><th>三塁打</th><th>本塁打</th><th>打点</th><th>三振</th><th>四球</th><th>死球</th><th>犠打</th><th>犠飛</th><th>進塁打</th><th>盗塁</th><th>失策</th><th>出塁率</th><th>長打率</th></tr></thead>
+      <tbody><tr><td>${b.g}</td><td>${b.pa}</td><td>${b.ab}</td><td>${b.h}</td><td>${b.s2}</td><td>${b.s3}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.k}</td><td>${b.bb}</td><td>${b.hbp}</td><td>${b.sac}</td><td>${b.sf}</td><td>${b.adv}</td><td>${b.sb}</td><td>${b.e}</td><td>${fmtAvg(b.obp)}</td><td>${fmtAvg(b.slg)}</td></tr></tbody></table>
+    ${b.pb ? `<p class="tiny">捕逸：${b.pb}</p>` : ""}
     <div class="pcols">
       <div><h3>場面別</h3><table class="pt"><thead><tr><th class="l"></th><th>打席</th><th>打数</th><th>安打</th><th>打率</th><th>三振</th><th>三振率</th></tr></thead><tbody>
         ${sit("得点圏", b.risp)}${sit("初球", b.first)}${sit("追い込まれ後", b.two)}</tbody></table>
@@ -114,7 +115,7 @@ function pitcherPart(pid, gs, pit) {
   const lr = (label, x) => `<tr><td class="l">${label}</td><td>${x.bf}</td><td>${x.ab}</td><td>${x.h}</td><td>${x.k}</td><td>${x.bb + x.hbp}</td><td>${fmtAvg(x.oppAvg)}</td></tr>`;
   return `<h3>投手成績</h3>
     <div class="ptiles">
-      ${[["投球回", pit.ipText], ["QS", `${pit.qs}/${pit.gs}`], ["被打率", fmtAvg(pit.oppAvg)], ["初球S率", fmtPct(pit.fpsPct)], [`奪三振率(${state.settings.innings}回)`, fmtNum(pit.k7)], ["自責点", pit.er]].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("")}
+      ${[["投球回", pit.ipText], ["QS", `${pit.qs}/${pit.gs}`], ["被打率", fmtAvg(pit.oppAvg)], ["初球S率", fmtPct(pit.fpsPct)], [`奪三振率(${state.settings.innings}回)`, fmtNum(pit.k7)], ["自責点", pit.er], ["暴投", pit.wp]].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("")}
     </div>
     <div class="pcols">
       <div><table class="pt"><thead><tr><th class="l"></th><th>打者</th><th>打数</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>被打率</th></tr></thead><tbody>
@@ -154,8 +155,8 @@ export function viewGamePrint(id) {
         <div class="small" style="text-align:right">${esc(g.date)}<br>${esc(tname(g.tournamentId))}・${g.first !== false ? "先攻" : "後攻"}</div></header>
       ${scoreboard(g)}
       <h3>投手成績</h3>
-      <table class="pt"><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>失点</th><th>自責</th><th>QS</th>${opt.season ? `<th>通算QS</th><th>通算被打率</th>` : ""}</tr></thead><tbody>
-        ${plist.map((L) => { const s = opt.season ? pitching(upto, L.pid, state.settings) : null; return `<tr><td class="l">${esc(player(L.pid)?.name || "?")}${L.starter ? "（先発）" : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td>${L.pitches}</td><td>${L.h}</td><td>${L.k}</td><td>${L.bb + L.hbp}</td><td>${L.runs}</td><td>${L.er}</td><td>${L.starter ? (L.qs ? "<b>QS ○</b>" : "×") : "-"}</td>${s ? `<td>${s.qs}/${s.gs}</td><td>${fmtAvg(s.oppAvg)}</td>` : ""}</tr>`; }).join("") || `<tr><td class="l" colspan="10">記録なし</td></tr>`}
+      <table class="pt"><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>暴投</th><th>失点</th><th>自責</th><th>QS</th>${opt.season ? `<th>通算QS</th><th>通算被打率</th>` : ""}</tr></thead><tbody>
+        ${plist.map((L) => { const s = opt.season ? pitching(upto, L.pid, state.settings) : null; return `<tr><td class="l">${esc(player(L.pid)?.name || "?")}${L.starter ? "（先発）" : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td>${L.pitches}</td><td>${L.h}</td><td>${L.k}</td><td>${L.bb + L.hbp}</td><td>${L.wp}</td><td>${L.runs}</td><td>${L.er}</td><td>${L.starter ? (L.qs ? "<b>QS ○</b>" : "×") : "-"}</td>${s ? `<td>${s.qs}/${s.gs}</td><td>${fmtAvg(s.oppAvg)}</td>` : ""}</tr>`; }).join("") || `<tr><td class="l" colspan="10">記録なし</td></tr>`}
       </tbody></table>
       <p class="muted tiny">QS：先発で${Math.floor(state.settings.qs.minOuts / 3)}回以上・自責点${state.settings.qs.maxER}以下　相手投手：${esc(g.oppPitcher?.name || "")}（${HAND[g.oppPitcher?.hand] || "右"}投）</p>
       <h3>打撃成績</h3>
@@ -178,3 +179,87 @@ export function viewGamePrint(id) {
   } };
 }
 export { $$ };
+
+// ---------------------------------------------------------------------
+//  ランキング（画面で見て、そのままA4で印刷）
+// ---------------------------------------------------------------------
+const RF = loadFilter();
+export function viewRanking() {
+  const S = state.settings;
+  const gs = filteredGames(RF);
+  const n = gs.length;
+  const qualPA = Math.ceil(n * S.qual.paPerGame);
+  const qualOuts = Math.ceil(n * S.qual.ipPerGame * 3);
+  const ids = new Set(), pids = new Set();
+  for (const g of gs) for (const it of g.log || []) {
+    if (it.side === "off" && it.batter) ids.add(it.batter);
+    if (it.side === "def" && it.pitcher) pids.add(it.pitcher);
+    if (it.side === "def" && it.fielder) ids.add(it.fielder);
+    if (it.side === "def" && it.catcher) ids.add(it.catcher);
+    if (it.side === "off" && it.runner) ids.add(it.runner);
+  }
+  for (const g of gs) Object.keys(g.extras || {}).forEach((k) => ids.add(k));
+  const bat = [...ids].map((pid) => { const b = batting(gs, pid, S); return { pid, ...b, rispAvg: b.risp.avg }; });
+  const pit = [...pids].map((pid) => ({ pid, ...pitching(gs, pid, S) }));
+  const nm = (pid) => esc(player(pid)?.name || "（削除済み）");
+  // 上位5人（同じ数字は同順位。0や記録なしは載せない）
+  const rank = (arr, key, fmt, { asc = false, min = (x) => true, note = "" } = {}) => {
+    const list = arr.filter((x) => x[key] != null && min(x) && (asc || x[key] > 0))
+      .sort((a, b) => (asc ? a[key] - b[key] : b[key] - a[key]));
+    let prev = null, place = 0;
+    const rows = [];
+    list.forEach((x, i) => { if (x[key] !== prev) place = i + 1; prev = x[key]; if (place <= 5) rows.push({ place, x }); });
+    return { rows, fmt, note };
+  };
+  const box = (title, r) => `<div class="rk ${r.noCrown ? "plain" : ""}"><h3>${title}${r.note ? ` <span class="muted tiny">${r.note}</span>` : ""}</h3>
+    ${r.rows.length ? `<table class="pt"><tbody>${r.rows.map(({ place, x }) => `<tr class="${place === 1 ? "top" : ""}"><td style="width:2.2em">${place}位</td><td class="l">${place === 1 && !r.noCrown ? "👑 " : ""}${nm(x.pid)}</td><td><b>${r.fmt(x[r.key0])}</b></td></tr>`).join("")}</tbody></table>` : `<p class="muted tiny">該当者なし</p>`}</div>`;
+  const B = (title, key, fmt, o = {}) => { const r = rank(bat, key, fmt, o); r.key0 = key; r.noCrown = o.noCrown; return box(title, r); };
+  const P = (title, key, fmt, o = {}) => { const r = rank(pit, key, fmt, o); r.key0 = key; r.noCrown = o.noCrown; return box(title, r); };
+  const num = (v) => v;
+  const qa = { min: (x) => x.pa >= qualPA, note: `（${qualPA}打席以上）` };
+  const qp = { min: (x) => x.outs >= qualOuts, note: `（${Math.floor(qualOuts / 3)}回${qualOuts % 3 ? (qualOuts % 3) + "/3" : ""}以上）` };
+  const html = `
+    <div class="noprint">
+      <h1>ランキング</h1>
+      ${filterBar(RF, "rflt")}
+      <div class="row" style="margin:8px 0"><span class="muted small grow">規定打席・規定投球回は「設定 → 集計ルール」で変えられます。</span>
+        <button class="btn primary big" id="print">🖨 印刷する</button></div>
+    </div>
+    <section class="page">
+      <header class="phead"><div><div class="muted small">${team()}　ランキング</div>
+        <div class="pname">${esc(filterLabel(RF))} <span>${n}試合</span></div></div>
+        <div class="small muted">${today()} 作成</div></header>
+      <h3 class="rksec">打撃部門</h3>
+      <div class="rkgrid">
+        ${B("首位打者（打率）", "avg", fmtAvg, qa)}
+        ${B("OPS王", "ops", fmtAvg, qa)}
+        ${B("最多安打", "h", num)}
+        ${B("本塁打王", "hr", num)}
+        ${B("打点王", "rbi", num)}
+        ${B("盗塁王", "sb", num)}
+        ${B("進塁打王", "adv", num)}
+        ${B("犠打王", "sac", num)}
+        ${B("得点圏打率", "rispAvg", fmtAvg, { min: (x) => x.risp.ab >= Math.max(3, Math.ceil(n / 2)), note: `（得点圏${Math.max(3, Math.ceil(n / 2))}打数以上）` })}
+        ${B("出塁率", "obp", fmtAvg, qa)}
+      </div>
+      <h3 class="rksec">投手部門</h3>
+      <div class="rkgrid">
+        ${P("奪三振", "k", num)}
+        ${P("QS", "qs", num)}
+        ${P("投球回", "outs", (v) => `${Math.floor(v / 3)}回${v % 3 ? (v % 3) + "/3" : ""}`)}
+        ${P("被打率（低い順）", "oppAvg", fmtAvg, { ...qp, asc: true })}
+        ${P("防御率（低い順・7回換算）", "era7", (v) => fmtNum(v), { ...qp, asc: true })}
+        ${P("初球ストライク率", "fpsPct", fmtPct, qp)}
+      </div>
+      <h3 class="rksec">守備・バッテリー（記録された数）</h3>
+      <div class="rkgrid">
+        ${B("失策", "e", num, { noCrown: true })}
+        ${B("捕逸", "pb", num, { noCrown: true })}
+        ${P("暴投", "wp", num, { noCrown: true })}
+      </div>
+    </section>`;
+  return { html: html, after: (root) => {
+    bindFilter(root, RF, rerender);
+    $("#print", root).onclick = () => window.print();
+  } };
+}

@@ -15,6 +15,7 @@ const RKEY = { "1B": "1", "2B": "2", "3B": "3", HR: "4", GO: "G", FO: "F", LO: "
 let sheetKeys = null; // 開いている選択画面のキー操作
 const EV = {
   sb: "盗塁", cs: "盗塁死", po: "牽制アウト", run: "走者生還", out: "アウト",
+  e: "失策", wp: "暴投", pb: "捕逸",
 };
 
 function ctx(g) {
@@ -145,6 +146,7 @@ function commit(g, p, res, o) {
     ts: new Date().toISOString(),
   };
   if (c.side === "def") it.er = o.er ?? runs;
+  if (o.fielder) it.fielder = o.fielder;
   const outsAfter = c.st.outs + it.outs;
   store.patchGame(g.id, { log: [...(g.log || []), it], cur: null, status: g.status === "final" ? "final" : "live" });
   if (outsAfter >= 3) setTimeout(() => toast("3アウト：攻守交代"), 50);
@@ -182,7 +184,7 @@ function undo(g) {
 // ---- 打った！のあとの結果選択 ----
 function resultSheet(g, np) {
   const c = ctx(g);
-  let sel = null, runs = 0, rbi = 0, er = 0, outs = 0;
+  let sel = null, runs = 0, rbi = 0, er = 0, outs = 0, fielder = null;
   const draw = (el) => {
     el.innerHTML = `<h2>結果を選んでください</h2>
       <div class="rgrid">${INPLAY.map((k) => `<button class="rbtn ${R[k].hit ? "hit" : ""} ${sel === k ? "on" : ""}" data-r="${k}">${R[k].label}<span class="key">${RKEY[k]}</span></button>`).join("")}</div>
@@ -192,6 +194,8 @@ function resultSheet(g, np) {
         ${numsRow("打点", "rbi", rbi, 4)}
         ${c.side === "def" ? numsRow("うち自責点", "er", er, runs) : ""}
         ${numsRow("この打席で増えたアウト", "outs", outs, 3)}
+        ${sel === "E" && c.side === "def" ? `<div><div class="muted small" style="font-weight:700;margin-bottom:4px">エラーした選手（分かれば）</div>
+          <div class="nums">${fielders(g).map((pid) => `<button data-fd="${pid}" class="${fielder === pid ? "on" : ""}" style="padding:0 10px">${esc(player(pid)?.name || "?")}</button>`).join("")}</div></div>` : ""}
         <p class="muted small" style="margin:0">点数とアウトは自動で入っています。違うときだけ押して直してください。</p>
       </div>` : ""}
       <div class="row" style="margin-top:14px"><button class="btn primary big grow" id="ok" ${sel ? "" : "disabled"}>確定</button><button class="btn big" id="cx">やめる</button></div>`;
@@ -201,13 +205,14 @@ function resultSheet(g, np) {
       runs = a.runs; rbi = a.rbi; er = a.runs; outs = R[sel].outs;
       draw(el);
     });
+    $$("[data-fd]", el).forEach((b) => b.onclick = () => { fielder = fielder === b.dataset.fd ? null : b.dataset.fd; draw(el); });
     $$("[data-n]", el).forEach((b) => b.onclick = () => {
       const k = b.dataset.n, v = +b.dataset.v;
       if (k === "runs") { runs = v; rbi = Math.min(rbi, v) || (sel === "E" || sel === "DP" ? 0 : v); er = v; }
       if (k === "rbi") rbi = v; if (k === "er") er = v; if (k === "outs") outs = v;
       draw(el);
     });
-    $("#ok", el).onclick = () => { closeSheet(); commit(g, np, sel, { runs, rbi, er, outs }); };
+    $("#ok", el).onclick = () => { closeSheet(); commit(g, np, sel, { runs, rbi, er, outs, fielder: sel === "E" ? fielder : null }); };
     $("#cx", el).onclick = closeSheet;
   };
   sheet("", (el) => {
@@ -224,6 +229,17 @@ function numsRow(label, key, val, max) {
   return `<div><div class="muted small" style="font-weight:700;margin-bottom:4px">${label}</div><div class="nums">${Array.from({ length: max + 1 }, (_, i) => `<button data-n="${key}" data-v="${i}" class="${val === i ? "on" : ""}">${i}</button>`).join("")}</div></div>`;
 }
 
+// 守っている自チームの選手（スタメン＋今の投手）
+function fielders(g) {
+  const ids = [...(g.lineup || []).filter(Boolean)];
+  if (g.pitcher && !ids.includes(g.pitcher)) ids.push(g.pitcher);
+  return ids;
+}
+// 捕手らしい選手（守備位置に「捕」がある人）を先頭に
+function catcherFirst(ids) {
+  return [...ids].sort((a, b) => ((player(b)?.pos || "").includes("捕") ? 1 : 0) - ((player(a)?.pos || "").includes("捕") ? 1 : 0));
+}
+
 // ---- 走者・その他 ----
 function moreSheet(g) {
   const c = ctx(g);
@@ -237,11 +253,15 @@ function moreSheet(g) {
         <details><summary class="btn block">盗塁死（アウト）</summary>${runnerPick("cs")}</details>
         <details><summary class="btn block">牽制でアウト</summary>${runnerPick("po")}</details>
         <details><summary class="btn block">走者がホームイン（暴投・捕逸など）</summary>${runnerPick("run")}</details>
+        <div class="row"><button class="btn grow" data-ev="e">相手の失策</button><button class="btn grow" data-ev="wp">相手の暴投</button><button class="btn grow" data-ev="pb">相手の捕逸</button></div>
       ` : `
         <button class="btn block" data-ev="sb">盗塁された</button>
         <button class="btn block" data-ev="cs">盗塁を刺した（アウト）</button>
         <button class="btn block" data-ev="po">牽制で刺した（アウト）</button>
         <div class="row"><button class="btn grow" data-ev="run" data-er="1">走者ホームイン（自責）</button><button class="btn grow" data-ev="run" data-er="0">走者ホームイン（エラーで・非自責）</button></div>
+        <details><summary class="btn block">失策（エラー）</summary><div class="plist">${fielders(g).map((pid) => `<button class="btn" data-ev="e" data-fielder="${pid}">${esc(player(pid)?.name || "?")}${player(pid)?.pos ? ` <span class="muted small">${esc(player(pid).pos)}</span>` : ""}</button>`).join("")}<button class="btn" data-ev="e">（選ばずに記録）</button></div></details>
+        <button class="btn block" data-ev="wp">暴投（ワイルドピッチ）… 今の投手に記録</button>
+        <details><summary class="btn block">捕逸（パスボール）</summary><div class="plist">${catcherFirst(fielders(g)).map((pid) => `<button class="btn" data-ev="pb" data-catcher="${pid}">${esc(player(pid)?.name || "?")}${player(pid)?.pos ? ` <span class="muted small">${esc(player(pid).pos)}</span>` : ""}</button>`).join("")}<button class="btn" data-ev="pb">（選ばずに記録）</button></div></details>
       `}
       <button class="btn block" data-ev="out">アウトを1つ追加（その他のアウト）</button>
       <button class="btn block" id="chg">この回を終わりにする（攻守交代）</button>
@@ -249,11 +269,13 @@ function moreSheet(g) {
       <button class="btn block danger" id="fin">試合終了にする</button>
       <button class="btn block" id="cx">閉じる</button>
     </div>
-    <p class="muted small">盗塁などで走者が動いたら、画面上の塁をタップして直してください。</p>`, (el) => {
+    <p class="muted small">盗塁・暴投・捕逸・失策で走者が動いたら、画面上の塁をタップして直してください。点が入ったときは「走者がホームイン」も押してください。</p>`, (el) => {
     $$("[data-ev]", el).forEach((b) => b.onclick = () => {
       const extra = {};
       if (b.dataset.runner) extra.runner = b.dataset.runner;
       if (b.dataset.er) extra.er = b.dataset.er === "1";
+      if (b.dataset.fielder) extra.fielder = b.dataset.fielder;
+      if (b.dataset.catcher) extra.catcher = b.dataset.catcher;
       addEvent(state.games.find((x) => x.id === g.id), b.dataset.ev, extra);
     });
     $("#chg", el).onclick = () => {

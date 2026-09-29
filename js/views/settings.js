@@ -42,6 +42,8 @@ export function viewSettings() {
         <label class="f">奪三振率・防御率の換算イニング<input type="number" id="inn" min="1" max="9" value="${S.innings}" ${admin ? "" : "disabled"}></label>
         <label class="f">QSの条件：投球回（○回以上）<input type="number" id="qsinn" min="1" max="9" value="${Math.floor(S.qs.minOuts / 3)}" ${admin ? "" : "disabled"}></label>
         <label class="f">QSの条件：自責点（○点以下）<input type="number" id="qser" min="0" max="9" value="${S.qs.maxER}" ${admin ? "" : "disabled"}></label>
+        <label class="f">ランキングの規定打席（試合数 × ○）<input type="number" id="qpa" min="0" max="5" step="0.1" value="${S.qual.paPerGame}" ${admin ? "" : "disabled"}></label>
+        <label class="f">ランキングの規定投球回（試合数 × ○回）<input type="number" id="qip" min="0" max="7" step="0.1" value="${S.qual.ipPerGame}" ${admin ? "" : "disabled"}></label>
       </div>
       ${admin ? `<button class="btn primary" id="saverules" style="justify-self:start">ルールを保存</button>` : ""}
     </div>
@@ -96,7 +98,8 @@ export function viewSettings() {
     $("#saverules", root)?.addEventListener("click", () => {
       const abRules = {}; $$("[data-ab]", root).forEach((c) => (abRules[c.dataset.ab] = c.checked));
       const innings = Math.max(1, +$("#inn", root).value || 7);
-      saveS({ abRules, innings, qs: { minOuts: Math.max(1, +$("#qsinn", root).value || 5) * 3, maxER: Math.max(0, +$("#qser", root).value) } });
+      saveS({ abRules, innings, qs: { minOuts: Math.max(1, +$("#qsinn", root).value || 5) * 3, maxER: Math.max(0, +$("#qser", root).value) },
+        qual: { paPerGame: Math.max(0, +$("#qpa", root).value), ipPerGame: Math.max(0, +$("#qip", root).value) } });
       toast("ルールを保存しました");
     });
     // メンバー
@@ -130,7 +133,7 @@ export function viewSettings() {
 
 function saveS(patch) {
   const S = state.settings;
-  store.saveSettings({ teamName: S.teamName, innings: S.innings, qs: S.qs, abRules: S.abRules, tournaments: S.tournaments, ...patch });
+  store.saveSettings({ teamName: S.teamName, innings: S.innings, qs: S.qs, qual: S.qual, abRules: S.abRules, tournaments: S.tournaments, ...patch });
 }
 
 function playerSheet(id) {

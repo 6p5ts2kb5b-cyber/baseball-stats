@@ -11,7 +11,7 @@ import { viewInput } from "./views/input.js";
 import { viewGame } from "./views/game.js";
 import { viewBatting, viewPitching, viewPlayer } from "./views/statsview.js";
 import { viewSettings } from "./views/settings.js";
-import { viewReport, viewGamePrint } from "./views/print.js";
+import { viewReport, viewGamePrint, viewRanking } from "./views/print.js";
 
 const app = document.getElementById("app");
 
@@ -26,6 +26,7 @@ const routes = [
   { re: /^#\/game\/([\w-]+)\/print$/, view: viewGamePrint, live: true, nav: "games" },
   { re: /^#\/game\/([\w-]+)$/, view: viewGame, live: true, nav: "games" },
   { re: /^#\/report$/, view: viewReport, live: true, nav: "report" },
+  { re: /^#\/ranking$/, view: viewRanking, live: true, nav: "ranking" },
   { re: /^#\/batting$/, view: viewBatting, live: true, nav: "batting" },
   { re: /^#\/pitching$/, view: viewPitching, live: true, nav: "pitching" },
   { re: /^#\/player\/([\w-]+)$/, view: viewPlayer, live: true, nav: "batting" },
@@ -85,7 +86,7 @@ function topbar() {
     ${state.user ? `<button class="btn sm" id="logout" style="background:transparent;color:inherit;border-color:rgb(255 255 255 / .3)">ログアウト</button>` : ""}</header>`;
 }
 function navbar(cur) {
-  const items = [["home", "#/", "ホーム"], ["games", "#/games", "試合"], ["batting", "#/batting", "打者成績"], ["pitching", "#/pitching", "投手成績"], ["report", "#/report", "印刷"], ["settings", "#/settings", "設定"]];
+  const items = [["home", "#/", "ホーム"], ["games", "#/games", "試合"], ["batting", "#/batting", "打者成績"], ["pitching", "#/pitching", "投手成績"], ["ranking", "#/ranking", "ランキング"], ["report", "#/report", "印刷"], ["settings", "#/settings", "設定"]];
   return `<nav class="nav noprint">${items.map(([k, h, l]) => `<a href="${h}" class="${cur === k ? "on" : ""}">${l}</a>`).join("")}</nav>`;
 }
 

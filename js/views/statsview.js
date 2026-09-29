@@ -26,7 +26,7 @@ const BCOLS = [
   { k: "g", label: "試合" }, { k: "pa", label: "打席" }, { k: "ab", label: "打数" }, { k: "h", label: "安打" },
   { k: "s1", label: "単打" }, { k: "s2", label: "二塁打" }, { k: "s3", label: "三塁打" }, { k: "hr", label: "本塁打" },
   { k: "rbi", label: "打点" }, { k: "k", label: "三振" }, { k: "bb", label: "四球" }, { k: "hbp", label: "死球" },
-  { k: "sac", label: "犠打" }, { k: "sf", label: "犠飛" }, { k: "adv", label: "進塁打" }, { k: "sb", label: "盗塁" }, { k: "sbPct", label: "盗塁成功率", fmt: fmtPct },
+  { k: "sac", label: "犠打" }, { k: "sf", label: "犠飛" }, { k: "adv", label: "進塁打" }, { k: "sb", label: "盗塁" }, { k: "sbPct", label: "盗塁成功率", fmt: fmtPct }, { k: "e", label: "失策" }, { k: "pb", label: "捕逸" },
   { k: "avg", label: "打率", fmt: fmtAvg }, { k: "obp", label: "出塁率", fmt: fmtAvg }, { k: "slg", label: "長打率", fmt: fmtAvg }, { k: "ops", label: "OPS", fmt: fmtAvg },
   { k: "rispAvg", label: "得点圏打率", fmt: fmtAvg }, { k: "firstAvg", label: "初球打率", fmt: fmtAvg }, { k: "twoAvg", label: "追込後打率", fmt: fmtAvg }, { k: "twoK", label: "追込後三振率", fmt: fmtPct },
 ];
@@ -55,7 +55,7 @@ const PCOLS = [
   { k: "g", label: "登板" }, { k: "gs", label: "先発" }, { k: "qs", label: "QS" }, { k: "qsPct", label: "QS率", fmt: fmtPct },
   { k: "outs", label: "投球回", fmt: (v, r) => r.ipText }, { k: "bf", label: "打者" }, { k: "pitches", label: "球数" },
   { k: "h", label: "被安打" }, { k: "hr", label: "被本塁打" }, { k: "k", label: "奪三振" }, { k: "bb", label: "与四球" }, { k: "hbp", label: "与死球" },
-  { k: "runs", label: "失点" }, { k: "er", label: "自責点" },
+  { k: "wp", label: "暴投" }, { k: "runs", label: "失点" }, { k: "er", label: "自責点" },
   { k: "oppAvg", label: "被打率", fmt: fmtAvg }, { k: "fpsPct", label: "初球S率", fmt: fmtPct }, { k: "strikePct", label: "S率", fmt: fmtPct },
   { k: "k7", label: "奪三振率", fmt: (v) => fmtNum(v) }, { k: "era7", label: "防御率", fmt: (v) => fmtNum(v) },
 ];
@@ -108,8 +108,8 @@ export function viewPlayer(pid) {
       <div class="tile"><div class="k">盗塁</div><div class="v">${b.sb}</div></div>
     </div>
     <h2>基本成績</h2>
-    <div class="tablewrap"><table><thead><tr><th>試合</th><th>打席</th><th>打数</th><th>安打</th><th>二塁打</th><th>三塁打</th><th>本塁打</th><th>打点</th><th>三振</th><th>四球</th><th>死球</th><th>犠打</th><th>犠飛</th><th>進塁打</th><th>盗塁</th><th>盗塁死</th><th>盗塁成功率</th><th>失策</th><th>出塁率</th><th>長打率</th></tr></thead>
-      <tbody><tr><td>${b.g}</td><td>${b.pa}</td><td>${b.ab}</td><td>${b.h}</td><td>${b.s2}</td><td>${b.s3}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.k}</td><td>${b.bb}</td><td>${b.hbp}</td><td>${b.sac}</td><td>${b.sf}</td><td>${b.adv}</td><td>${b.sb}</td><td>${b.cs}</td><td>${fmtPct(b.sbPct)}</td><td>${b.e}</td><td>${fmtAvg(b.obp)}</td><td>${fmtAvg(b.slg)}</td></tr></tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th>試合</th><th>打席</th><th>打数</th><th>安打</th><th>二塁打</th><th>三塁打</th><th>本塁打</th><th>打点</th><th>三振</th><th>四球</th><th>死球</th><th>犠打</th><th>犠飛</th><th>進塁打</th><th>盗塁</th><th>盗塁死</th><th>盗塁成功率</th><th>失策</th><th>捕逸</th><th>出塁率</th><th>長打率</th></tr></thead>
+      <tbody><tr><td>${b.g}</td><td>${b.pa}</td><td>${b.ab}</td><td>${b.h}</td><td>${b.s2}</td><td>${b.s3}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.k}</td><td>${b.bb}</td><td>${b.hbp}</td><td>${b.sac}</td><td>${b.sf}</td><td>${b.adv}</td><td>${b.sb}</td><td>${b.cs}</td><td>${fmtPct(b.sbPct)}</td><td>${b.e}</td><td>${b.pb}</td><td>${fmtAvg(b.obp)}</td><td>${fmtAvg(b.slg)}</td></tr></tbody></table></div>
     <h2>場面別</h2>
     <div class="tablewrap"><table><thead><tr><th class="l">場面</th><th>打席</th><th>打数</th><th>安打</th><th>打率</th><th>三振</th><th>三振率</th></tr></thead><tbody>
       ${sitRow("得点圏（2塁か3塁に走者）", b.risp)}${sitRow("初球を打った", b.first)}${sitRow("追い込まれてから（2ストライク）", b.two)}
@@ -128,6 +128,7 @@ export function viewPlayer(pid) {
         <div class="tile"><div class="k">初球ストライク率</div><div class="v">${fmtPct(pit.fpsPct)}</div></div>
         <div class="tile"><div class="k">奪三振率(${state.settings.innings}回)</div><div class="v">${fmtNum(pit.k7)}</div></div>
         <div class="tile"><div class="k">自責点</div><div class="v">${pit.er}</div></div>
+        <div class="tile"><div class="k">暴投</div><div class="v">${pit.wp}</div></div>
       </div>
       <h3>対右打者・対左打者</h3>
       <div class="tablewrap"><table><thead><tr><th class="l"></th><th>打者</th><th>打数</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>被打率</th><th>初球S率</th></tr></thead><tbody>

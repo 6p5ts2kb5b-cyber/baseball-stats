@@ -4,21 +4,25 @@
 import * as store from "../store.js";
 import { state } from "../store.js";
 import { esc, $, $$, toast, sheet, closeSheet, player, pname, tname, activePlayers, numberOf, HAND } from "../ui.js";
-import { gameState, gameResult, pitcherLines, batting, R, RESULTS, itemOuts, fmtAvg } from "../stats.js";
+import { gameState, gameResult, gameMisc, pitcherLines, batting, R, RESULTS, itemOuts, fmtAvg } from "../stats.js";
 
-const EVTEXT = { sb: "盗塁", cs: "盗塁死", po: "牽制アウト", run: "走者生還", out: "アウト" };
+const EVTEXT = { sb: "盗塁", cs: "盗塁死", po: "牽制アウト", run: "走者生還", out: "アウト", e: "失策", wp: "暴投", pb: "捕逸" };
 
 export function itemText(it, g) {
   const where = `${it.inn}回${it.half === "T" ? "表" : "裏"}`;
   if (it.k === "ev") {
-    const who = it.runner ? esc(player(it.runner)?.name || "") + " " : "";
-    const side = it.side === "def" ? "（相手）" : "";
+    const pid = it.runner || it.fielder || it.catcher || (it.type === "wp" ? it.pitcher : null);
+    const who = pid ? esc(player(pid)?.name || "") + " " : "";
+    const misc = ["e", "wp", "pb"].includes(it.type);
+    // 盗塁などは守備中なら相手の走者、失策・暴投・捕逸は攻撃中なら相手のミス
+    const side = misc ? (it.side === "off" ? "（相手）" : "") : it.side === "def" ? "（相手）" : "";
     return `<span class="muted">${where}</span> ${who}${EVTEXT[it.type] || it.type}${side}${it.type === "run" && it.side === "def" && it.er === false ? "（非自責）" : ""}`;
   }
   const who = it.side === "off" ? esc(player(it.batter)?.name || "?") : `相手${it.slot}番`;
   const r = R[it.res]?.label || it.res;
   const extra = [(it.runs ? `${it.runs}点` : ""), (it.rbi ? `打点${it.rbi}` : "")].filter(Boolean).join("・");
-  return `<span class="muted">${where}</span> ${it.slot}番 ${who}：<strong>${r}</strong>${extra ? `（${extra}）` : ""} <span class="muted small">${esc(it.p || "")}</span>`;
+  const fd = it.res === "E" && it.fielder ? `（${esc(player(it.fielder)?.name || "")}の失策）` : "";
+  return `<span class="muted">${where}</span> ${it.slot}番 ${who}：<strong>${r}</strong>${fd}${extra ? `（${extra}）` : ""} <span class="muted small">${esc(it.p || "")}</span>`;
 }
 
 export function scoreboard(g) {
@@ -28,17 +32,19 @@ export function scoreboard(g) {
   const rows = g.first !== false ? [["us", us], ["them", them]] : [["them", them], ["us", us]];
   const hits = { us: 0, them: 0 };
   (g.log || []).forEach((it) => { if (it.k === "pa" && R[it.res]?.hit) hits[it.side === "off" ? "us" : "them"]++; });
-  return `<div class="board"><table><thead><tr><th></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join("")}<th>計</th><th>安</th></tr></thead><tbody>
-    ${rows.map(([k, name]) => `<tr><td class="team">${esc(name)}</td>${Array.from({ length: n }, (_, i) => `<td>${st.line[k][i] ?? ""}</td>`).join("")}<td class="r">${st.score[k]}</td><td>${hits[k]}</td></tr>`).join("")}
-  </tbody></table></div>`;
+  const misc = gameMisc(g);
+  return `<div class="board"><table><thead><tr><th></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join("")}<th>計</th><th>安</th><th>失</th></tr></thead><tbody>
+    ${rows.map(([k, name]) => `<tr><td class="team">${esc(name)}</td>${Array.from({ length: n }, (_, i) => `<td>${st.line[k][i] ?? ""}</td>`).join("")}<td class="r">${st.score[k]}</td><td>${hits[k]}</td><td>${misc[k].e}</td></tr>`).join("")}
+  </tbody></table></div>
+  <p class="muted small" style="margin:4px 0 0">暴投：${esc(us)} ${misc.us.wp}・${esc(them)} ${misc.them.wp}　捕逸：${esc(us)} ${misc.us.pb}・${esc(them)} ${misc.them.pb}</p>`;
 }
 
 export function pitcherTable(g, editable) {
   const { lines } = pitcherLines(g, state.settings);
   const arr = Object.values(lines).sort((a, b) => (b.starter ? 1 : 0) - (a.starter ? 1 : 0));
   if (!arr.length) return `<p class="muted">守備の記録がまだありません。</p>`;
-  return `<div class="tablewrap"><table><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>失点</th><th>自責</th><th>QS</th></tr></thead><tbody>
-    ${arr.map((L) => `<tr><td class="l">${pname(L.pid)}${L.starter ? ' <span class="muted small">先発</span>' : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td>${L.pitches}</td><td>${L.h}</td><td>${L.k}</td><td>${L.bb + L.hbp}</td>
+  return `<div class="tablewrap"><table><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>暴投</th><th>失点</th><th>自責</th><th>QS</th></tr></thead><tbody>
+    ${arr.map((L) => `<tr><td class="l">${pname(L.pid)}${L.starter ? ' <span class="muted small">先発</span>' : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td>${L.pitches}</td><td>${L.h}</td><td>${L.k}</td><td>${L.bb + L.hbp}</td><td>${L.wp}</td>
       <td>${editable ? `<input type="number" min="0" style="width:64px;min-height:34px;padding:4px" data-adj="runs" data-pid="${L.pid}" value="${L.runs}">` : L.runs}</td>
       <td>${editable ? `<input type="number" min="0" style="width:64px;min-height:34px;padding:4px" data-adj="er" data-pid="${L.pid}" value="${L.er}">` : L.er}</td>
       <td>${L.starter ? (L.qs ? '<span class="chip qs">QS ○</span>' : '<span class="chip">×</span>') : "-"}</td></tr>`).join("")}
@@ -148,6 +154,7 @@ export function editItemSheet(g, itemId) {
         <label class="f">打点<input type="number" min="0" max="4" name="rbi" value="${it.rbi ?? 0}"></label>
         ${off ? "" : `<label class="f">うち自責点<input type="number" min="0" max="4" name="er" value="${it.er ?? it.runs ?? 0}"></label>`}
         <label class="f">この打席で増えたアウト<input type="number" min="0" max="3" name="outs" value="${itemOuts(it)}"></label>
+        ${off ? "" : `<label class="f">失策出塁のとき：エラーした選手<select name="fielder"><option value="">（なし・不明）</option>${pls.map((p) => `<option value="${p.id}" ${it.fielder === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>`}
       </div>
       <div><div class="muted small" style="font-weight:700">打席に入ったときの走者（得点圏の判定に使います）</div>
         <div class="row">${["1塁", "2塁", "3塁"].map((l, i) => `<label class="row" style="gap:4px"><input type="checkbox" name="r${i}" ${runners[i] ? "checked" : ""}> ${l}</label>`).join("")}</div></div>
@@ -161,7 +168,7 @@ export function editItemSheet(g, itemId) {
         runs: +f.runs.value || 0, rbi: +f.rbi.value || 0, outs: +f.outs.value || 0,
         runners: [0, 1, 2].map((i) => (f["r" + i].checked ? 1 : 0)),
       };
-      if (off) patch.batter = f.batter.value; else { patch.pitcher = f.pitcher.value; patch.er = +f.er.value || 0; }
+      if (off) patch.batter = f.batter.value; else { patch.pitcher = f.pitcher.value; patch.er = +f.er.value || 0; patch.fielder = f.res.value === "E" ? f.fielder.value || null : null; }
       save(patch);
     };
     $("#rm", el).onclick = () => { if (confirm("この打席を消しますか？")) save(null); };

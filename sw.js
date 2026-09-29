@@ -1,6 +1,6 @@
 // オフラインでもアプリを開けるようにする仕組み（サービスワーカー）
 // アプリを更新したら VERSION の数字を1つ上げてください。
-const VERSION = "v3";
+const VERSION = "v4";
 const CACHE = "baseball-stats-" + VERSION;
 const CORE = [
   "./", "./index.html", "./css/app.css", "./manifest.webmanifest",

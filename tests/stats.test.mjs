@@ -142,4 +142,18 @@ t("空データでも0除算エラーにならない", () => {
   const b = S.batting([], "x"); const p = S.pitching([], "x");
   assert.equal(S.fmtAvg(b.avg), "-"); assert.equal(S.fmtNum(p.k7), "-"); assert.equal(S.fmtPct(p.fpsPct), "-");
 });
+t("失策・暴投・捕逸の集計", () => {
+  const g = { id: "g", first: true, extras: { f: { e: 1 } }, log: [
+    { k: "pa", inn: 1, half: "B", side: "def", pitcher: "p", p: "X", res: "E", fielder: "f", outs: 0 },
+    { k: "ev", inn: 1, half: "B", side: "def", type: "e", fielder: "f", pitcher: "p" },
+    { k: "ev", inn: 1, half: "B", side: "def", type: "wp", pitcher: "p" },
+    { k: "ev", inn: 1, half: "B", side: "def", type: "pb", catcher: "c", pitcher: "p" },
+    { k: "ev", inn: 2, half: "T", side: "off", type: "e" },
+    { k: "pa", inn: 2, half: "T", side: "off", batter: "a", p: "X", res: "E" },
+  ]};
+  assert.equal(S.batting([g], "f").e, 3);          // 失策出塁1＋試合中1＋試合後1
+  assert.equal(S.batting([g], "c").pb, 1);
+  assert.equal(S.pitching([g], "p").wp, 1);
+  assert.deepEqual(S.gameMisc(g), { us: { e: 3, wp: 1, pb: 1 }, them: { e: 2, wp: 0, pb: 0 } });
+});
 console.log(`\nすべて成功（${n}件）`);
