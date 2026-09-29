@@ -194,13 +194,14 @@ export function gameState(game) {
       outs = 0; runners = [0, 0, 0];
     }
   }
-  // 表示用に、現在の回まで0を埋める
-  for (let i = 0; i < inn; i++) {
-    const cur = i === inn - 1;
+  // 表示用に、記録のある半イニングは0を埋める
+  const playedHalves = new Set(log.map((it) => it.inn + it.half));
+  const maxInn = log.reduce((m, it) => Math.max(m, it.inn || 0), 0);
+  for (let i = 1; i <= maxInn; i++) {
     for (const who of ["us", "them"]) {
-      const sideHalf = (who === "us") === (game.first !== false) ? "T" : "B";
-      const played = !cur || sideHalf === "T" || half === "B";
-      if (line[who][i] == null && played) line[who][i] = 0;
+      const h = (who === "us") === (game.first !== false) ? "T" : "B";
+      const played = playedHalves.has(i + h) || i < maxInn;
+      if (line[who][i - 1] == null && played) line[who][i - 1] = 0;
     }
   }
   if (game.cur && game.cur.inn === inn && game.cur.half === half && game.cur.runners) runners = game.cur.runners.slice();

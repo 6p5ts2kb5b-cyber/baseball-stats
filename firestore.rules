@@ -1,0 +1,53 @@
+rules_version = '2';
+// =====================================================================
+//  Firestore セキュリティルール（データの鍵）
+//  Firebaseコンソール → Firestore → 「ルール」タブ に全部貼り付けて「公開」します。
+//  ・ログインしていない人は何も見られません
+//  ・「members」に登録された人だけが読み書きできます
+//  ・持ち主（OWNER）は最初から管理者です
+// =====================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function isOwner() { return signedIn() && myEmail() == 'barkatthesun2002@gmail.com'; }
+    function memberDoc() { return /databases/$(database)/documents/members/$(myEmail()); }
+    function isMember() { return signedIn() && exists(memberDoc()); }
+    function role() { return get(memberDoc()).data.role; }
+
+    function isAdmin()  { return isOwner() || (isMember() && role() == 'admin'); }
+    function canWrite() { return isAdmin() || (isMember() && role() == 'scorer'); }
+    function canRead()  { return isOwner() || isMember(); }
+
+    // ログインできる人の名簿（管理者だけが変更できる）
+    match /members/{email} {
+      allow read: if canRead() || (signedIn() && email == myEmail());
+      allow write: if isAdmin();
+    }
+    // チーム設定（集計ルール・大会区分など）
+    match /settings/{id} {
+      allow read: if canRead();
+      allow write: if isAdmin();
+    }
+    // 選手
+    match /players/{id} {
+      allow read: if canRead();
+      allow create, update: if canWrite();
+      allow delete: if isAdmin();
+    }
+    // 試合（1球ごとの記録を含む）
+    match /games/{id} {
+      allow read: if canRead();
+      allow create, update: if canWrite();
+      allow delete: if isAdmin();
+    }
+    // 変更履歴（将来用）
+    match /changeLog/{id} {
+      allow read: if isAdmin();
+      allow create: if canWrite();
+    }
+  }
+}
