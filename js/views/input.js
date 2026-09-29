@@ -10,6 +10,9 @@ import { itemText } from "./game.js";
 
 const PBTN = [["B", "ボール"], ["S", "見逃し"], ["K", "空振り"], ["F", "ファウル"], ["X", "打った！"], ["D", "死球"]];
 const INPLAY = ["1B", "2B", "3B", "HR", "GO", "FO", "LO", "DP", "E", "FC", "SAC", "SF", "ADV", "K"];
+// 「打った！」のあとの結果を選ぶキー
+const RKEY = { "1B": "1", "2B": "2", "3B": "3", HR: "4", GO: "G", FO: "F", LO: "L", DP: "P", E: "E", FC: "C", SAC: "B", SF: "Y", ADV: "A", K: "K" };
+let sheetKeys = null; // 開いている選択画面のキー操作
 const EV = {
   sb: "盗塁", cs: "盗塁死", po: "牽制アウト", run: "走者生還", out: "アウト",
 };
@@ -78,7 +81,8 @@ export function viewInput(id) {
         <div class="nm">${c.pName}<span class="hand">${HAND[c.ph]}</span></div></div>
     </div>
     <div class="seq" aria-label="この打席の投球">${c.p ? [...c.p].map((ch, i) => `<span class="pc ${ch}">${i + 1}${({ B: "ボ", S: "見", K: "空", F: "フ", X: "打", D: "死" })[ch]}</span>`).join("") : `<span class="muted small">この打席の投球がここに並びます</span>`}</div>
-    <div class="pad">${PBTN.map(([k, l]) => `<button class="pbtn ${k}" data-p="${k}">${l}</button>`).join("")}</div>
+    <div class="pad">${PBTN.map(([k, l]) => `<button class="pbtn ${k}" data-p="${k}">${l}<span class="key">${k}</span></button>`).join("")}</div>
+    <p class="muted small keyhelp">キーボード：<b>B</b> ボール ／ <b>S</b> 見逃し ／ <b>K</b> 空振り ／ <b>F</b> ファウル ／ <b>X</b> 打った ／ <b>D</b> 死球 ／ <b>Backspace</b> 1球戻す</p>
     <div class="tools">
       <button class="btn big" id="undo">↶ 1球戻す</button>
       <button class="btn big" id="more">走者・その他</button>
@@ -181,7 +185,8 @@ function resultSheet(g, np) {
   let sel = null, runs = 0, rbi = 0, er = 0, outs = 0;
   const draw = (el) => {
     el.innerHTML = `<h2>結果を選んでください</h2>
-      <div class="rgrid">${INPLAY.map((k) => `<button class="rbtn ${R[k].hit ? "hit" : ""} ${sel === k ? "on" : ""}" data-r="${k}">${R[k].label}</button>`).join("")}</div>
+      <div class="rgrid">${INPLAY.map((k) => `<button class="rbtn ${R[k].hit ? "hit" : ""} ${sel === k ? "on" : ""}" data-r="${k}">${R[k].label}<span class="key">${RKEY[k]}</span></button>`).join("")}</div>
+      <p class="muted small keyhelp" style="margin:6px 0 0">キーで選んで <b>Enter</b> で確定、<b>Esc</b> でやめる</p>
       ${sel ? `<div class="stack" style="margin-top:14px">
         ${numsRow("入った点", "runs", runs, 4)}
         ${numsRow("打点", "rbi", rbi, 4)}
@@ -205,7 +210,15 @@ function resultSheet(g, np) {
     $("#ok", el).onclick = () => { closeSheet(); commit(g, np, sel, { runs, rbi, er, outs }); };
     $("#cx", el).onclick = closeSheet;
   };
-  sheet("", draw);
+  sheet("", (el) => {
+    draw(el);
+    sheetKeys = (e) => {
+      const k = e.key.toUpperCase();
+      const hit = Object.entries(RKEY).find(([, v]) => v === k);
+      if (hit) { e.preventDefault(); el.querySelector(`[data-r="${hit[0]}"]`)?.click(); return; }
+      if (e.key === "Enter" && sel) { e.preventDefault(); el.querySelector("#ok")?.click(); }
+    };
+  });
 }
 function numsRow(label, key, val, max) {
   return `<div><div class="muted small" style="font-weight:700;margin-bottom:4px">${label}</div><div class="nums">${Array.from({ length: max + 1 }, (_, i) => `<button data-n="${key}" data-v="${i}" class="${val === i ? "on" : ""}">${i}</button>`).join("")}</div></div>`;
@@ -317,3 +330,23 @@ function pitcherSheet(g) {
   }
 }
 export { RESULTS };
+
+// ---- キーボード入力（学校PCで試合後にまとめて入力するとき用） ----
+document.addEventListener("keydown", (e) => {
+  const m = location.hash.match(/^#\/game\/([\w-]+)\/input$/);
+  if (!m || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  const openSheet = document.querySelector(".sheet-back");
+  if (openSheet) {
+    if (e.key === "Escape") { e.preventDefault(); closeSheet(); return; }
+    if (sheetKeys && openSheet.querySelector("[data-r]")) sheetKeys(e);
+    return;
+  }
+  sheetKeys = null;
+  const g = state.games.find((x) => x.id === m[1]);
+  if (!g) return;
+  const k = e.key.toUpperCase();
+  if (["B", "S", "K", "F", "X", "D"].includes(k)) { e.preventDefault(); pitch(g, k); }
+  else if (e.key === "Backspace") { e.preventDefault(); undo(g); }
+});

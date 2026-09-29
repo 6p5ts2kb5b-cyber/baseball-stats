@@ -197,6 +197,8 @@ export function saveGame(g) {
 export function patchGame(id, patch) {
   const data = clean(stamp(patch));
   if (DEMO) return demoPatch("games", id, data);
+  // 画面にはすぐ反映（キーを速く連打しても前の入力を取りこぼさないように）
+  state.games = state.games.map((x) => (x.id === id ? { ...x, ...data } : x)); emit();
   report(fb.setDoc(fb.doc(fb.db, "games", id), data, { merge: true }));
 }
 
