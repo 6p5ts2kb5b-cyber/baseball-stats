@@ -55,7 +55,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav a { padding: 10px 12px; text-decoration: none; color: var(--muted); font-weight: 600; white-space: nowrap; border-bottom: 3px solid transparent; }
 .nav a.on { color: var(--accent); border-bottom-color: var(--accent); }
 
-main { max-width: 1100px; margin: 0 auto; padding: 16px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); }
+main { max-width: 1440px; margin: 0 auto; padding: 16px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); }
 h1 { font-size: 22px; margin: 4px 0 12px; text-wrap: balance; }
 h2 { font-size: 17px; margin: 22px 0 8px; }
 h3 { font-size: 15px; margin: 16px 0 6px; }
@@ -245,7 +245,7 @@ svg.trend .ax.strong { fill: var(--ink); font-weight: 700; font-size: 12px; }
 @media (max-width: 640px) { .pcols { grid-template-columns: 1fr; } }
 
 @media print {
-  @page { size: A4 portrait; margin: 10mm; }
+  @page { size: A4 landscape; margin: 8mm 10mm; }
   :root { --ink: #000; --muted: #444; --line: #999; --surface: #fff; --accent: #1d6b47; color-scheme: light; }
   html, body { background: #fff !important; }
   main { max-width: none; padding: 0 !important; }
@@ -258,6 +258,8 @@ svg.trend .ax.strong { fill: var(--ink); font-weight: 700; font-size: 12px; }
   table.pt { font-size: 10pt; }
   .pcols { grid-template-columns: 1fr 1fr !important; }
   .ptiles { grid-template-columns: repeat(7, 1fr); }
+  .ptiles b { font-size: 16pt; }
+  .pname { font-size: 16pt; }
   h3, table, svg { break-inside: avoid; }
 }
 
@@ -281,3 +283,25 @@ svg.trend .ax.strong { fill: var(--ink); font-weight: 700; font-size: 12px; }
 .z { opacity: .35; }
 table.pt.wide { font-size: 11px; }
 @media print { table.pt.wide { font-size: 8.5pt; } table.pt.wide th, table.pt.wide td { padding: 3px 3px; } table.pt.wide th { white-space: normal; line-height: 1.15; } }
+
+/* 横向きレイアウト：左に場面別など、右に試合ごと */
+.land { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 16px; align-items: start; }
+.lcol, .rcol { min-width: 0; }
+@media (max-width: 900px) { .land { grid-template-columns: 1fr; } }
+@media print {
+  .land { grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) !important; gap: 12px; }
+  .rkgrid { grid-template-columns: repeat(6, 1fr) !important; }
+  table.pt { font-size: 9pt; }
+  .page h3 { margin: 6px 0 2px; }
+  svg.trend { max-height: 95px; }
+}
+
+.rcol .pcols { grid-template-columns: 1fr; gap: 6px; }
+@media print {
+  .rcol table.pt { font-size: 8pt; }
+  .rcol table.pt th, .rcol table.pt td { padding: 2px 3px; }
+  .rcol .pcols { grid-template-columns: 1fr !important; }
+  .rcol .ptiles { grid-template-columns: repeat(7, 1fr); }
+  .rcol .ptiles b { font-size: 12pt; }
+  .ptiles div { padding: 2px 6px; }
+}

@@ -74,7 +74,8 @@ function playerPage(p, gs) {
     <table class="pt"><thead><tr><th>試合</th><th>打席</th><th>打数</th><th>安打</th><th>二塁打</th><th>三塁打</th><th>本塁打</th><th>打点</th><th>三振</th><th>四球</th><th>死球</th><th>犠打</th><th>犠飛</th><th>進塁打</th><th>盗塁</th><th>失策</th><th>出塁率</th><th>長打率</th></tr></thead>
       <tbody><tr><td>${b.g}</td><td>${b.pa}</td><td>${b.ab}</td><td>${b.h}</td><td>${b.s2}</td><td>${b.s3}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.k}</td><td>${b.bb}</td><td>${b.hbp}</td><td>${b.sac}</td><td>${b.sf}</td><td>${b.adv}</td><td>${b.sb}</td><td>${b.e}</td><td>${fmtAvg(b.obp)}</td><td>${fmtAvg(b.slg)}</td></tr></tbody></table>
     ${b.pb ? `<p class="tiny">捕逸：${b.pb}</p>` : ""}
-    <div class="pcols">
+    <div class="land">
+    <div class="lcol">
       <div><h3>場面別</h3><table class="pt"><thead><tr><th class="l"></th><th>打席</th><th>打数</th><th>安打</th><th>打率</th><th>三振</th><th>三振率</th></tr></thead><tbody>
         ${sit("得点圏", b.risp)}${sit("初球", b.first)}${sit("追い込まれ後", b.two)}</tbody></table>
         <h3>対右投手・対左投手</h3><table class="pt"><thead><tr><th class="l"></th><th>打席</th><th>打数</th><th>安打</th><th>三振</th><th>打率</th></tr></thead><tbody>
@@ -83,12 +84,14 @@ function playerPage(p, gs) {
         ${[0, 1, 2].map((s0) => `<tr><th>${s0}ストライク</th>${[0, 1, 2, 3].map((b0) => cnt(b0, s0)).join("")}</tr>`).join("")}</tbody></table>
         <p class="muted tiny">上＝打率、下＝安打/打数（最後の1球の直前のカウント）</p></div>
     </div>
+    <div class="rcol">
     ${opt.games && rows.length ? `<h3>試合ごとの成績</h3>
       ${rows.length >= 2 ? trendSvg(rows) : ""}
       <table class="pt"><thead><tr><th class="l">日付</th><th class="l">相手</th><th class="l">結果</th><th>打数</th><th>安打</th><th>本塁打</th><th>打点</th><th>三振</th><th>四死球</th><th>犠打</th><th>進塁打</th><th>盗塁</th><th>失策</th><th>累計打率</th></tr></thead><tbody>
       ${rows.map((r) => `<tr><td class="l">${esc((r.g.date || "").slice(5).replace("-", "/"))}</td><td class="l">${esc(r.g.opponent || "")}</td><td class="l">${esc(r.res)}</td><td>${r.gb.ab}</td><td>${r.gb.h}</td><td>${r.gb.hr}</td><td>${r.gb.rbi}</td><td>${r.gb.k}</td><td>${r.gb.bb + r.gb.hbp}</td><td>${r.gb.sac}</td><td>${r.gb.adv}</td><td>${r.gb.sb}</td><td>${r.gb.e}</td><td>${fmtAvg(r.cum)}</td></tr>`).join("")}
       </tbody></table>` : ""}
     ${pitched ? pitcherPart(p.id, gs, pit) : ""}
+    </div></div>
   </section>`;
 }
 
