@@ -63,6 +63,7 @@ export function viewGame(id) {
     ${canWrite ? `<div class="row noprint" style="margin-bottom:12px">
       <a class="btn primary big" href="#/game/${g.id}/input">${fin ? "入力画面を開く" : "入力を続ける"}</a>
       <a class="btn" href="#/game/${g.id}/edit">試合情報・スタメンを直す</a>
+      <a class="btn" href="#/game/${g.id}/print">🖨 印刷</a>
       ${fin ? `<button class="btn" id="reopen">入力中に戻す</button>` : `<button class="btn" id="finish">試合終了にする</button>`}
     </div>` : ""}
     ${scoreboard(g)}

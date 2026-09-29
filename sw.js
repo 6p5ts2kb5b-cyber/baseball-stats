@@ -1,11 +1,11 @@
 // オフラインでもアプリを開けるようにする仕組み（サービスワーカー）
 // アプリを更新したら VERSION の数字を1つ上げてください。
-const VERSION = "v2";
+const VERSION = "v3";
 const CACHE = "baseball-stats-" + VERSION;
 const CORE = [
   "./", "./index.html", "./css/app.css", "./manifest.webmanifest",
   "./js/app.js", "./js/store.js", "./js/stats.js", "./js/ui.js", "./js/firebase-config.js",
-  "./js/views/games.js", "./js/views/input.js", "./js/views/game.js", "./js/views/statsview.js", "./js/views/settings.js",
+  "./js/views/games.js", "./js/views/input.js", "./js/views/game.js", "./js/views/statsview.js", "./js/views/settings.js", "./js/views/print.js",
   "./icons/icon-192.png", "./js/demo-data.js",
 ];
 self.addEventListener("install", (e) => {

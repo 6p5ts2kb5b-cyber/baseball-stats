@@ -104,7 +104,13 @@ export function filterToQuery(f) {
   if (f.by === "opp") q.opponent = f.value;
   return q;
 }
+// 日付・試合番号の順に並べる
+export function byDate(a, b) { return (a.date || "").localeCompare(b.date || "") || (a.no ?? 0) - (b.no ?? 0); }
 export function filteredGames(f) {
+  if (f.by === "last") {
+    const n = Number(f.value) || 5;
+    return filterGames(liveGames(), { season: f.season || null }).sort(byDate).slice(-n);
+  }
   const q = filterToQuery(f);
   if (f.by !== "all" && !f.value) return filterGames(liveGames(), { season: q.season });
   return filterGames(liveGames(), q);
@@ -115,6 +121,7 @@ export function filterLabel(f) {
   if (f.by === "game" && f.value) { const g = state.games.find((x) => x.id === f.value); return g ? `第${g.no}試合 vs ${g.opponent}` : s; }
   if (f.by === "month" && f.value) return `${s}・${Number(f.value.slice(5))}月`;
   if (f.by === "opp" && f.value) return `${s}・vs ${f.value}`;
+  if (f.by === "last") return `${s}・直近${Number(f.value) || 5}試合`;
   return `${s}・通算`;
 }
 export function seasons() {
@@ -128,15 +135,16 @@ export function filterBar(f, id = "flt") {
   if (f.by === "tour") opts = tournaments(true).map((t) => `<option value="${t.id}" ${f.value === t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("");
   if (f.by === "game") opts = gs.map((g) => `<option value="${g.id}" ${f.value === g.id ? "selected" : ""}>${gameLabel(g)}</option>`).join("");
   if (f.by === "month") opts = [...new Set(gs.map((g) => g.date?.slice(0, 7)))].filter(Boolean).sort().map((m) => `<option value="${m}" ${f.value === m ? "selected" : ""}>${Number(m.slice(5))}月</option>`).join("");
+  if (f.by === "last") opts = [3, 5, 10, 15, 20].map((n) => `<option value="${n}" ${Number(f.value || 5) === n ? "selected" : ""}>直近${n}試合</option>`).join("");
   if (f.by === "opp") opts = [...new Set(gs.map((g) => g.opponent))].filter(Boolean).sort().map((o) => `<option ${f.value === o ? "selected" : ""}>${esc(o)}</option>`).join("");
   return `<div class="card row noprint" id="${id}">
     <label class="f" style="min-width:110px">年度
       <select data-f="season">${seasons().map((s) => `<option value="${s}" ${Number(f.season) === s ? "selected" : ""}>${s}年度</option>`).join("")}<option value="" ${!f.season ? "selected" : ""}>全年度</option></select></label>
     <label class="f" style="min-width:120px">範囲
       <select data-f="by">
-        ${[["all", "通算"], ["tour", "大会別"], ["game", "試合別"], ["month", "月別"], ["opp", "相手別"]].map(([v, l]) => `<option value="${v}" ${f.by === v ? "selected" : ""}>${l}</option>`).join("")}
+        ${[["all", "通算"], ["last", "直近の試合"], ["tour", "大会別"], ["game", "試合別"], ["month", "月別"], ["opp", "相手別"]].map(([v, l]) => `<option value="${v}" ${f.by === v ? "selected" : ""}>${l}</option>`).join("")}
       </select></label>
-    ${f.by !== "all" ? `<label class="f grow">選択<select data-f="value"><option value="">（選んでください）</option>${opts}</select></label>` : ""}
+    ${f.by !== "all" ? `<label class="f grow">選択<select data-f="value">${f.by === "last" ? "" : `<option value="">（選んでください）</option>`}${opts}</select></label>` : ""}
   </div>`;
 }
 // 絞り込み欄が変わったら f を更新して rerender を呼ぶ
@@ -144,7 +152,7 @@ export function bindFilter(root, f, rerender) {
   $$("[data-f]", root).forEach((el) => el.addEventListener("change", () => {
     const k = el.dataset.f;
     f[k] = k === "season" ? (el.value ? Number(el.value) : "") : el.value;
-    if (k === "by" || k === "season") f.value = "";
+    if (k === "by" || k === "season") f.value = f.by === "last" ? "5" : "";
     saveFilter(f); rerender();
   }));
 }
