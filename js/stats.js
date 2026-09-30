@@ -212,14 +212,20 @@ export function gameState(game) {
 
 // 1試合の失策・暴投・捕逸（us=自チームが犯した数、them=相手が犯した数）
 export function gameMisc(game) {
-  const m = { us: { e: 0, wp: 0, pb: 0 }, them: { e: 0, wp: 0, pb: 0 } };
+  // e/wp/pb＝そのチームが守備で犯した数、sb/cs＝そのチームの走者の盗塁・盗塁死
+  // sbA＝盗塁された数、csA＝盗塁を刺した数（守備側から見た数）
+  const z = () => ({ e: 0, wp: 0, pb: 0, sb: 0, cs: 0, sbA: 0, csA: 0 });
+  const m = { us: z(), them: z() };
   for (const it of game.log || []) {
-    const who = it.side === "def" ? "us" : "them"; // 守備中のミスは自チーム、攻撃中は相手
-    if ((it.k === "ev" && it.type === "e") || (it.k === "pa" && it.res === "E")) m[who].e++;
-    if (it.k === "ev" && it.type === "wp") m[who].wp++;
-    if (it.k === "ev" && it.type === "pb") m[who].pb++;
+    const def = it.side === "def" ? "us" : "them"; // 守っているチーム
+    const off = it.side === "def" ? "them" : "us"; // 攻めているチーム
+    if ((it.k === "ev" && it.type === "e") || (it.k === "pa" && it.res === "E")) m[def].e++;
+    if (it.k === "ev" && it.type === "wp") m[def].wp++;
+    if (it.k === "ev" && it.type === "pb") m[def].pb++;
+    if (it.k === "ev" && it.type === "sb") { m[off].sb++; m[def].sbA++; }
+    if (it.k === "ev" && it.type === "cs") { m[off].cs++; m[def].csA++; }
   }
-  for (const x of Object.values(game.extras || {})) m.us.e += +x.e || 0;
+  for (const x of Object.values(game.extras || {})) { m.us.e += +x.e || 0; m.us.sb += +x.sb || 0; m.us.cs += +x.cs || 0; m.them.sbA += +x.sb || 0; m.them.csA += +x.cs || 0; }
   return m;
 }
 
@@ -383,7 +389,7 @@ export function pitcherLines(game, settings) {
   const S = mergeSettings(settings);
   const lines = {};
   let starter = null;
-  const get = (pid) => (lines[pid] = lines[pid] || { pid, outs: 0, runs: 0, er: 0, bf: 0, pitches: 0, strikes: 0, fpN: 0, fpS: 0, k: 0, h: 0, bb: 0, hbp: 0, wp: 0 });
+  const get = (pid) => (lines[pid] = lines[pid] || { pid, outs: 0, runs: 0, er: 0, bf: 0, pitches: 0, strikes: 0, fpN: 0, fpS: 0, k: 0, h: 0, bb: 0, hbp: 0, wp: 0, pb: 0, sbA: 0 });
   for (const it of game.log || []) {
     if (it.side !== "def" || !it.pitcher) continue;
     const L = get(it.pitcher);
@@ -402,6 +408,8 @@ export function pitcherLines(game, settings) {
     }
     if (it.k === "ev" && it.type === "run") { L.runs += 1; if (it.er !== false) L.er += 1; }
     if (it.k === "ev" && it.type === "wp") L.wp += 1;
+    if (it.k === "ev" && it.type === "pb") L.pb += 1;   // 投げていたときの捕逸
+    if (it.k === "ev" && it.type === "sb") L.sbA += 1;  // 投げていたときに盗塁された数
     L.outs += itemOuts(it);
   }
   // 試合後に手で直した失点・自責点があれば優先

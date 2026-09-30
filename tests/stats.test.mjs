@@ -154,6 +154,19 @@ t("失策・暴投・捕逸の集計", () => {
   assert.equal(S.batting([g], "f").e, 3);          // 失策出塁1＋試合中1＋試合後1
   assert.equal(S.batting([g], "c").pb, 1);
   assert.equal(S.pitching([g], "p").wp, 1);
-  assert.deepEqual(S.gameMisc(g), { us: { e: 3, wp: 1, pb: 1 }, them: { e: 2, wp: 0, pb: 0 } });
+  const m = S.gameMisc(g);
+  assert.deepEqual([m.us.e, m.us.wp, m.us.pb, m.them.e, m.them.wp, m.them.pb], [3, 1, 1, 2, 0, 0]);
+});
+
+t("盗塁された数（投手ごと・チーム）", () => {
+  const g = { id: "g", first: true, log: [
+    { k: "ev", inn: 1, half: "B", side: "def", type: "sb", pitcher: "p" },
+    { k: "ev", inn: 1, half: "B", side: "def", type: "sb", pitcher: "p" },
+    { k: "ev", inn: 1, half: "B", side: "def", type: "cs", pitcher: "p" },
+    { k: "ev", inn: 2, half: "T", side: "off", type: "sb", runner: "a" },
+  ]};
+  const m = S.gameMisc(g);
+  assert.deepEqual([m.us.sbA, m.us.csA, m.us.sb, m.them.sb, m.them.sbA], [2, 1, 1, 2, 1]);
+  assert.equal(S.pitcherLines(g).lines.p.sbA, 2);
 });
 console.log(`\nすべて成功（${n}件）`);

@@ -46,15 +46,17 @@ export function scoreboard(g) {
   return `<div class="board"><table><thead><tr><th></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join("")}<th>計</th><th>安</th><th>失</th></tr></thead><tbody>
     ${rows.map(([k, name]) => `<tr><td class="team">${esc(name)}</td>${Array.from({ length: n }, (_, i) => `<td>${st.line[k][i] ?? ""}</td>`).join("")}<td class="r">${st.score[k]}</td><td>${hits[k]}</td><td>${misc[k].e}</td></tr>`).join("")}
   </tbody></table></div>
-  <p class="muted small" style="margin:4px 0 0">暴投：${esc(us)} ${misc.us.wp}・${esc(them)} ${misc.them.wp}　捕逸：${esc(us)} ${misc.us.pb}・${esc(them)} ${misc.them.pb}</p>`;
+  <div class="tablewrap misc-wrap"><table class="pt misc"><thead><tr><th class="l">守備・走塁</th><th>失策</th><th>暴投</th><th>捕逸</th><th>盗塁された</th><th>盗塁を刺した</th><th>盗塁</th><th>盗塁死</th></tr></thead><tbody>
+    ${rows.map(([k, name]) => { const x = misc[k]; return `<tr><td class="l">${esc(name)}</td><td>${x.e}</td><td>${x.wp}</td><td>${x.pb}</td><td>${x.sbA}</td><td>${x.csA}</td><td>${x.sb}</td><td>${x.cs}</td></tr>`; }).join("")}
+  </tbody></table></div>`;
 }
 
 export function pitcherTable(g, editable) {
   const { lines } = pitcherLines(g, state.settings);
   const arr = Object.values(lines).sort((a, b) => (b.starter ? 1 : 0) - (a.starter ? 1 : 0));
   if (!arr.length) return `<p class="muted">守備の記録がまだありません。</p>`;
-  return `<div class="tablewrap"><table><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>ストライク率</th><th>初球S率</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>暴投</th><th>失点</th><th>自責</th><th>QS</th></tr></thead><tbody>
-    ${arr.map((L) => `<tr><td class="l">${pname(L.pid)}${L.starter ? ' <span class="muted small">先発</span>' : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td><b>${L.pitches}</b></td><td>${fmtPct(L.strikePct)}</td><td>${fmtPct(L.fpsPct)}</td><td>${L.h}</td><td>${L.k}</td><td>${L.bb + L.hbp}</td><td>${L.wp}</td>
+  return `<div class="tablewrap"><table><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>ストライク率</th><th>初球S率</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>暴投</th><th>捕逸</th><th>被盗塁</th><th>失点</th><th>自責</th><th>QS</th></tr></thead><tbody>
+    ${arr.map((L) => `<tr><td class="l">${pname(L.pid)}${L.starter ? ' <span class="muted small">先発</span>' : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td><b>${L.pitches}</b></td><td>${fmtPct(L.strikePct)}</td><td>${fmtPct(L.fpsPct)}</td><td>${L.h}</td><td>${L.k}</td><td>${L.bb + L.hbp}</td><td>${L.wp}</td><td>${L.pb}</td><td>${L.sbA}</td>
       <td>${editable ? `<input type="number" min="0" style="width:64px;min-height:34px;padding:4px" data-adj="runs" data-pid="${L.pid}" value="${L.runs}">` : L.runs}</td>
       <td>${editable ? `<input type="number" min="0" style="width:64px;min-height:34px;padding:4px" data-adj="er" data-pid="${L.pid}" value="${L.er}">` : L.er}</td>
       <td>${L.starter ? (L.qs ? '<span class="chip qs">QS ○</span>' : '<span class="chip">×</span>') : "-"}</td></tr>`).join("")}
