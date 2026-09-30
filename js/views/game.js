@@ -18,6 +18,28 @@ const zero = (v) => (v ? v : `<span class="z">0</span>`);
 export const gameCells = (b) => GAME_COLS.map(([, f]) => `<td>${zero(f(b))}</td>`).join("");
 export const gameHeads = () => GAME_COLS.map(([l]) => `<th>${l}</th>`).join("");
 
+// この試合のチーム打撃（打率・出塁率・長打率・OPS）… 自チームと相手
+function teamBatTable(g, rows) {
+  const us = batting([g], null, state.settings);
+  const them = oppLines(g, state.settings).team;
+  // 得点圏（2塁か3塁に走者がいた打席）の 安打/打数
+  const risp = (side) => {
+    let ab = 0, h = 0;
+    for (const it of g.log || []) {
+      if (it.k !== "pa" || it.side !== side || !R[it.res]) continue;
+      const rs = it.runners || [];
+      if (!(rs[1] || rs[2])) continue;
+      if (state.settings.abRules[it.res]) ab++;
+      if (R[it.res].hit) h++;
+    }
+    return { ab, h, avg: ab ? h / ab : null };
+  };
+  const line = { us: { ...us, rsp: risp("off") }, them: { ...them, rsp: risp("def") } };
+  return `<div class="tablewrap misc-wrap"><table class="pt misc teambat"><thead><tr><th class="l">チーム打撃</th><th>打率</th><th>出塁率</th><th>長打率</th><th>OPS</th><th>打席</th><th>打数</th><th>安打</th><th>本塁打</th><th>三振</th><th>四死球</th><th>得点圏</th></tr></thead><tbody>
+    ${rows.map(([k, name]) => { const x = line[k]; return `<tr><td class="l">${esc(name)}</td><td><b>${fmtAvg(x.avg)}</b></td><td><b>${fmtAvg(x.obp)}</b></td><td><b>${fmtAvg(x.slg)}</b></td><td>${fmtAvg(x.ops)}</td><td>${x.pa}</td><td>${x.ab}</td><td>${x.h}</td><td>${x.hr}</td><td>${x.k}</td><td>${x.bb + x.hbp}</td><td>${x.rsp.h}/${x.rsp.ab}（${fmtAvg(x.rsp.avg)}）</td></tr>`; }).join("")}
+  </tbody></table></div>`;
+}
+
 // 打席ごとの経過（スコアブック風）… 打順×回の表に「3-2 / 左飛」
 export function playGrid(g, side, H = "h2") {
   const log = (g.log || []).filter((i) => i.k === "pa" && i.side === side && R[i.res]);
@@ -99,6 +121,7 @@ export function scoreboard(g) {
   return `<div class="board"><table><thead><tr><th></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join("")}<th>計</th><th>安</th><th>失</th></tr></thead><tbody>
     ${rows.map(([k, name]) => `<tr><td class="team">${esc(name)}</td>${Array.from({ length: n }, (_, i) => `<td>${st.line[k][i] ?? ""}</td>`).join("")}<td class="r">${st.score[k]}</td><td>${hits[k]}</td><td>${misc[k].e}</td></tr>`).join("")}
   </tbody></table></div>
+  ${teamBatTable(g, rows)}
   <div class="tablewrap misc-wrap"><table class="pt misc"><thead><tr><th class="l">守備・走塁</th><th>失策</th><th>暴投</th><th>捕逸</th><th>盗塁された</th><th>盗塁を刺した</th><th>盗塁</th><th>盗塁死</th></tr></thead><tbody>
     ${rows.map(([k, name]) => { const x = misc[k]; return `<tr><td class="l">${esc(name)}</td><td>${x.e}</td><td>${x.wp}</td><td>${x.pb}</td><td>${x.sbA}</td><td>${x.csA}</td><td>${x.sb}</td><td>${x.cs}</td></tr>`; }).join("")}
   </tbody></table></div>`;
