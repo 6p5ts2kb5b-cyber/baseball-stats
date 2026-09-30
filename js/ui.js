@@ -14,6 +14,12 @@ export const today = () => {
 };
 export const thisSeason = () => seasonOf(today());
 export const HAND = { R: "右", L: "左", S: "両" };
+export function jpDate(d) {
+  if (!d) return "";
+  const [y, m, day] = d.split("-").map(Number);
+  const w = "日月火水木金土"[new Date(y, m - 1, day).getDay()];
+  return `${m}月${day}日(${w})`;
+}
 
 // ---- 選手 ----
 export function player(id) { return state.players.find((p) => p.id === id); }

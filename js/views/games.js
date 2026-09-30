@@ -50,6 +50,7 @@ export function viewGameEdit(id) {
           <label class="f">日付<input type="date" name="date" value="${esc(g.date)}" required></label>
           <label class="f">試合番号（年度の通し番号）<input type="number" name="no" value="${esc(g.no)}" min="1" required></label>
           <label class="f">対戦相手<input type="text" name="opponent" value="${esc(g.opponent)}" list="opps" required placeholder="例：〇〇中"><datalist id="opps">${opps.map((o) => `<option value="${esc(o)}">`).join("")}</datalist></label>
+          <label class="f">会場（任意）<input type="text" name="venue" value="${esc(g.venue || "")}" list="venues" placeholder="例：〇〇グラウンド"><datalist id="venues">${[...new Set(liveGames().map((x) => x.venue).filter(Boolean))].map((v) => `<option value="${esc(v)}">`).join("")}</datalist></label>
           <label class="f">大会区分<select name="tournamentId">${tournaments().map((t) => `<option value="${t.id}" ${g.tournamentId === t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>
         </div>
         <div class="row"><span class="f" style="font-size:13px;color:var(--muted);font-weight:600">自チームは</span>
@@ -93,7 +94,7 @@ export function viewGameEdit(id) {
       const lineup = Array.from({ length: 9 }, (_, i) => f["l" + i].value || null);
       const data = {
         ...(orig || { log: [], status: "live", oppHands: {} }),
-        date: f.date.value, no: Number(f.no.value), opponent: f.opponent.value.trim(), tournamentId: f.tournamentId.value,
+        date: f.date.value, no: Number(f.no.value), opponent: f.opponent.value.trim(), venue: f.venue.value.trim(), tournamentId: f.tournamentId.value,
         first, lineup, pitcher: f.pitcher.value || null,
         oppPitcher: { name: f.oppName.value.trim(), hand },
       };

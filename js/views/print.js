@@ -5,7 +5,9 @@
 //  A4で印刷できます。PDFにしたいときは、印刷画面で「PDFに保存」を選びます。
 // =====================================================================
 import { state } from "../store.js";
-import { esc, $, $$, player, numberOf, gradeText, activePlayers, filterBar, bindFilter, loadFilter, filteredGames, filterLabel, tname, HAND, liveGames, byDate, today } from "../ui.js";
+import { esc, $, $$, player, numberOf, gradeText, activePlayers, filterBar, bindFilter, loadFilter, filteredGames, filterLabel, tname, HAND, liveGames, byDate, today, jpDate, sheet, closeSheet, toast } from "../ui.js";
+import { renderPage, canvasToPdf, shareFile, shareText, canShareFile, lineUrl } from "../share.js";
+import { gameState } from "../stats.js";
 import { batting, pitching, pitcherLines, gameResult, seasonOf, filterGames, fmtAvg, fmtPct, fmtNum, R } from "../stats.js";
 import { scoreboard, gameCells, gameHeads } from "./game.js";
 
@@ -145,17 +147,20 @@ export function viewGamePrint(id) {
   const html = `
     <div class="noprint">
       <div class="row"><a href="#/game/${g.id}" class="btn sm">‹ 試合の記録</a></div>
-      <h1>試合レポートの印刷</h1>
-      <div class="card row">
-        <label class="row" style="gap:4px"><input type="checkbox" id="os" ${opt.season ? "checked" : ""}> 各選手の${season}年度の通算成績（この試合まで）も載せる</label>
-        <button class="btn primary big" id="print" style="margin-left:auto">🖨 印刷する</button>
+      <h1>試合レポート（印刷・共有）</h1>
+      <div class="card stack">
+        <label class="row" style="gap:6px"><input type="checkbox" id="os" ${opt.season ? "checked" : ""}> 各選手の${season}年度の通算成績（この試合まで）も載せる</label>
+        <div class="sharebar">
+          <button class="btn primary big" id="share">📤 共有する（LINEなど）</button>
+          <button class="btn big" id="print">🖨 印刷する</button>
+        </div>
+        <p class="muted small" style="margin:0">「共有する」から、画像・PDF・テキストを選んでLINEなどで送れます。下の内容がそのまま画像やPDFになります。</p>
       </div>
-      <p class="muted small">印刷画面で「送信先」を「PDFに保存」にすると、PDFファイルにできます。</p>
     </div>
     <section class="page">
       <header class="phead"><div><div class="muted small">${team()}　試合レポート</div>
-        <div class="pname">第${g.no}試合 vs ${esc(g.opponent)} <span>${r.us}-${r.them} ${g.status === "final" ? r.wl : "（途中）"}</span></div></div>
-        <div class="small" style="text-align:right">${esc(g.date)}<br>${esc(tname(g.tournamentId))}・${g.first !== false ? "先攻" : "後攻"}</div></header>
+        <div class="pname">${team()} ${r.us} - ${r.them} ${esc(g.opponent)} <span>${g.status === "final" ? ({ 勝: "勝ち", 負: "負け", 分: "引き分け" })[r.wl] : "（試合途中）"}</span></div></div>
+        <div class="small" style="text-align:right">${esc(jpDate(g.date))}　第${g.no}試合<br>${esc(tname(g.tournamentId))}・${g.first !== false ? "先攻" : "後攻"}${g.venue ? `<br>会場：${esc(g.venue)}` : ""}</div></header>
       ${scoreboard(g)}
       <h3>投手成績</h3>
       <table class="pt"><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>S率</th><th>初球S率</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>暴投</th><th>失点</th><th>自責</th><th>QS</th>${opt.season ? `<th>通算QS</th><th>通算被打率</th>` : ""}</tr></thead><tbody>
@@ -179,6 +184,7 @@ export function viewGamePrint(id) {
     </section>`;
   return { html, after: (root) => {
     $("#os", root).onchange = (e) => { opt.season = e.target.checked; rerender(); };
+    $("#share", root).onclick = () => shareSheet(g, root.querySelector("section.page"));
     $("#print", root).onclick = () => window.print();
   } };
 }
@@ -266,4 +272,86 @@ export function viewRanking() {
     bindFilter(root, RF, rerender);
     $("#print", root).onclick = () => window.print();
   } };
+}
+
+
+// ---------------------------------------------------------------------
+//  共有（画像・PDF・テキスト）… 印刷画面（section.page）をそのまま使う
+// ---------------------------------------------------------------------
+const CKEY = "bs-share-comment";
+function loadComment() { try { return localStorage.getItem(CKEY) ?? "応援ありがとうございました。"; } catch { return "応援ありがとうございました。"; } }
+function saveComment(v) { try { localStorage.setItem(CKEY, v); } catch {} }
+
+export function resultText(g, { line = true, comment = "" } = {}) {
+  const r = gameResult(g);
+  const st = gameState(g);
+  const us = state.settings.teamName || "野球部";
+  const wl = g.status === "final" ? `（${({ 勝: "勝ち", 負: "負け", 分: "引き分け" })[r.wl]}）` : "（試合途中）";
+  const rows = [`【試合結果】`, `${us} ${r.us} - ${r.them} ${g.opponent || ""}${wl}`, `日時：${jpDate(g.date)}`];
+  rows.push(`大会：${tname(g.tournamentId)}`);
+  if (g.venue) rows.push(`会場：${g.venue}`);
+  if (line) {
+    const fmt = (arr) => arr.map((v) => (v == null ? "x" : v)).join(" ");
+    const order = g.first !== false ? [[us, "us"], [g.opponent || "相手", "them"]] : [[g.opponent || "相手", "them"], [us, "us"]];
+    rows.push("", "［回ごとの得点］");
+    for (const [name, k] of order) rows.push(`${name}：${fmt(st.line[k])}　計${st.score[k]}`);
+  }
+  if (comment.trim()) rows.push("", comment.trim());
+  return rows.join("\n");
+}
+
+function shareSheet(g, pageEl) {
+  const base = `試合結果_${(g.date || "").replace(/-/g, "")}_vs${(g.opponent || "").replace(/[\\/:*?"<>|\s]/g, "")}`;
+  let img = null, pdf = null;
+  const el = sheet(`<h2>共有する</h2>
+    <p class="muted small" style="margin-top:-6px">スマホでは、ボタンを押すと共有メニューが開きます。そこで「LINE」を選んでください。</p>
+    <div class="shareprev" id="prev"><span class="muted">画像を作っています…</span></div>
+    <div class="stack" style="margin-top:12px">
+      <button class="btn primary big block" id="sImg" disabled>📷 画像で共有</button>
+      <button class="btn big block" id="sPdf" disabled>📄 PDFで共有（印刷にも使えます）</button>
+      <button class="btn big block" id="sTxt">💬 テキストで共有</button>
+      <div id="txtBox" hidden class="stack">
+        <label class="row" style="gap:6px"><input type="checkbox" id="tLine" checked> 回ごとの得点も入れる</label>
+        <label class="f">ひとこと（最後に付きます）<input type="text" id="tCom" value="${esc(loadComment())}"></label>
+        <label class="f">送る文章（直せます）<textarea id="tTxt" rows="9" style="font-size:15px"></textarea></label>
+        <div class="row">
+          <button class="btn primary grow" id="tShare">共有メニューで送る</button>
+          <a class="btn grow" id="tLineApp" href="#" target="_blank" rel="noopener">LINEで送る</a>
+          <button class="btn grow" id="tCopy">コピー</button>
+        </div>
+      </div>
+      <button class="btn block" id="cx">閉じる</button>
+    </div>`);
+  const $s = (q) => el.querySelector(q);
+  // 画像とPDFを先に作っておく（共有ボタンを押したらすぐ共有メニューが開くように）
+  setTimeout(async () => {
+    try {
+      const cImg = renderPage(pageEl, 1080, 2);
+      const blob = await new Promise((res) => cImg.toBlob(res, "image/png"));
+      img = new File([blob], base + ".png", { type: "image/png" });
+      const cPdf = renderPage(pageEl, 1400, 2);
+      pdf = new File([await canvasToPdf(cPdf)], base + ".pdf", { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      $s("#prev").innerHTML = `<img src="${url}" alt="共有する画像のプレビュー">`;
+      $s("#sImg").disabled = false; $s("#sPdf").disabled = false;
+      if (!canShareFile(img)) { $s("#sImg").textContent = "📷 画像を保存"; $s("#sPdf").textContent = "📄 PDFを保存（印刷にも使えます）"; }
+    } catch (e) {
+      console.error(e);
+      $s("#prev").innerHTML = `<span class="muted">画像を作れませんでした。テキストで共有してください。</span>`;
+    }
+  }, 30);
+  const done = (r) => { if (r === "saved") toast("保存しました"); if (r === "copied") toast("コピーしました。LINEに貼り付けてください"); };
+  $s("#sImg").onclick = async () => done(await shareFile(img, "試合結果"));
+  $s("#sPdf").onclick = async () => done(await shareFile(pdf, "試合結果"));
+  const refresh = () => {
+    saveComment($s("#tCom").value);
+    $s("#tTxt").value = resultText(g, { line: $s("#tLine").checked, comment: $s("#tCom").value });
+    $s("#tLineApp").href = lineUrl($s("#tTxt").value);
+  };
+  $s("#sTxt").onclick = () => { $s("#txtBox").hidden = false; refresh(); $s("#tTxt").scrollIntoView({ block: "nearest" }); };
+  $s("#tLine").onchange = refresh; $s("#tCom").oninput = refresh;
+  $s("#tTxt").oninput = () => { $s("#tLineApp").href = lineUrl($s("#tTxt").value); };
+  $s("#tShare").onclick = async () => done(await shareText($s("#tTxt").value));
+  $s("#tCopy").onclick = async () => { try { await navigator.clipboard.writeText($s("#tTxt").value); toast("コピーしました"); } catch { $s("#tTxt").select(); } };
+  $s("#cx").onclick = closeSheet;
 }
