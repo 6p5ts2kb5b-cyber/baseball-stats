@@ -248,19 +248,35 @@ function buildPdf(pages, pageW, pageH, m) {
 }
 
 // ---- 共有（スマホは共有メニュー、PCは保存） ----
+// 共有メニューが使えるか（アプリ内のブラウザなどでは使えないことがある）
 export function canShareFile(file) {
-  try { return !!(navigator.canShare && navigator.canShare({ files: [file] })); } catch { return false; }
+  if (!navigator.share) return false;
+  try { return navigator.canShare ? navigator.canShare({ files: [file] }) : true; } catch { return false; }
 }
-export async function shareFile(file, title) {
+export const isPhone = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+// 共有メニューを開く。使えないときは "unsupported" を返す（保存や長押しの画面に切り替える）
+export async function shareFile(file) {
   if (canShareFile(file)) {
-    try { await navigator.share({ files: [file], title }); return "shared"; }
-    catch (e) { if (e.name === "AbortError") return "cancel"; }
+    try { await navigator.share({ files: [file] }); return "shared"; }
+    catch (e) { if (e.name === "AbortError") return "cancel"; console.warn(e); }
   }
+  return "unsupported";
+}
+export function downloadFile(file) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(file); a.download = file.name;
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  return "saved";
+}
+// 共有メニューが使えないスマホ用：画像を大きく表示（長押し→「共有」「"写真"に保存」ができる）
+export function showImageViewer(file) {
+  const url = URL.createObjectURL(file);
+  const back = document.createElement("div");
+  back.className = "viewer";
+  back.innerHTML = `<div class="viewer-bar"><span>画像を<b>長押し</b> →「共有」でLINEを選べます。<br>「"写真"に保存」してからLINEで送ることもできます。</span><button class="btn" id="vclose">閉じる</button></div>
+    <div class="viewer-body"><img src="${url}" alt="試合結果の画像"></div>`;
+  document.body.append(back);
+  back.querySelector("#vclose").onclick = () => { back.remove(); URL.revokeObjectURL(url); };
 }
 export async function shareText(text) {
   if (navigator.share) {

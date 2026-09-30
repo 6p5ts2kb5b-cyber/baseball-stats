@@ -311,3 +311,11 @@ table.pt.wide { font-size: 11px; }
 .sharebar .btn { flex: 1 1 200px; }
 .shareprev { border: 1px solid var(--line); border-radius: 10px; background: #fff; max-height: 42vh; overflow: auto; display: grid; place-items: center; min-height: 80px; }
 .shareprev img { width: 100%; height: auto; display: block; }
+
+/* 画像の全画面表示（長押しで共有） */
+.viewer { position: fixed; inset: 0; z-index: 70; background: #111; color: #fff; display: flex; flex-direction: column; }
+.viewer-bar { display: flex; gap: 10px; align-items: center; padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 10px; font-size: 14px; background: #1b1b1b; }
+.viewer-bar span { flex: 1; }
+.viewer-bar .btn { color: #fff; background: transparent; border-color: #666; }
+.viewer-body { flex: 1; overflow: auto; padding: 10px; -webkit-touch-callout: default; }
+.viewer-body img { width: 100%; height: auto; display: block; -webkit-user-select: auto; -webkit-touch-callout: default; }

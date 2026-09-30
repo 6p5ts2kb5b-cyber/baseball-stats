@@ -6,7 +6,7 @@
 // =====================================================================
 import { state } from "../store.js";
 import { esc, $, $$, player, numberOf, gradeText, activePlayers, filterBar, bindFilter, loadFilter, filteredGames, filterLabel, tname, HAND, liveGames, byDate, today, jpDate, sheet, closeSheet, toast } from "../ui.js";
-import { renderPage, canvasToPdf, shareFile, shareText, canShareFile, lineUrl } from "../share.js";
+import { renderPage, canvasToPdf, shareFile, shareText, canShareFile, lineUrl, isPhone, downloadFile, showImageViewer } from "../share.js";
 import { gameState } from "../stats.js";
 import { batting, pitching, pitcherLines, gameResult, seasonOf, filterGames, fmtAvg, fmtPct, fmtNum, R } from "../stats.js";
 import { scoreboard, gameCells, gameHeads } from "./game.js";
@@ -305,6 +305,8 @@ function shareSheet(g, pageEl) {
   let img = null, pdf = null;
   const el = sheet(`<h2>共有する</h2>
     <p class="muted small" style="margin-top:-6px">スマホでは、ボタンを押すと共有メニューが開きます。そこで「LINE」を選んでください。</p>
+    <div class="alert small" id="noShare" hidden style="margin-bottom:8px">今の開き方では、スマホの共有メニューが使えません（アプリの中のブラウザで開いている場合など）。<br>
+      <b>Safari</b>（またはホーム画面に追加したアプリ）で開き直すと、共有ボタンからLINEを選べます。このままでも、画像を長押しすれば共有できます。</div>
     <div class="shareprev" id="prev"><span class="muted">画像を作っています…</span></div>
     <div class="stack" style="margin-top:12px">
       <button class="btn primary big block" id="sImg" disabled>📷 画像で共有</button>
@@ -334,15 +336,27 @@ function shareSheet(g, pageEl) {
       const url = URL.createObjectURL(blob);
       $s("#prev").innerHTML = `<img src="${url}" alt="共有する画像のプレビュー">`;
       $s("#sImg").disabled = false; $s("#sPdf").disabled = false;
-      if (!canShareFile(img)) { $s("#sImg").textContent = "📷 画像を保存"; $s("#sPdf").textContent = "📄 PDFを保存（印刷にも使えます）"; }
+      if (!canShareFile(img)) {
+        if (isPhone()) { $s("#noShare").hidden = false; $s("#sImg").textContent = "📷 画像を表示（長押しで共有）"; $s("#sPdf").textContent = "📄 PDFを開く"; }
+        else { $s("#sImg").textContent = "📷 画像を保存"; $s("#sPdf").textContent = "📄 PDFを保存（印刷にも使えます）"; }
+      }
     } catch (e) {
       console.error(e);
       $s("#prev").innerHTML = `<span class="muted">画像を作れませんでした。テキストで共有してください。</span>`;
     }
   }, 30);
   const done = (r) => { if (r === "saved") toast("保存しました"); if (r === "copied") toast("コピーしました。LINEに貼り付けてください"); };
-  $s("#sImg").onclick = async () => done(await shareFile(img, "試合結果"));
-  $s("#sPdf").onclick = async () => done(await shareFile(pdf, "試合結果"));
+  // 共有メニューが使えないとき：スマホは画像を大きく表示（長押しで共有）、PCは保存
+  $s("#sImg").onclick = async () => {
+    const r = await shareFile(img);
+    if (r !== "unsupported") return;
+    if (isPhone()) { $s("#noShare").hidden = false; showImageViewer(img); } else { downloadFile(img); toast("保存しました"); }
+  };
+  $s("#sPdf").onclick = async () => {
+    const r = await shareFile(pdf);
+    if (r !== "unsupported") return;
+    if (isPhone()) { $s("#noShare").hidden = false; window.open(URL.createObjectURL(pdf), "_blank") || downloadFile(pdf); } else { downloadFile(pdf); toast("保存しました"); }
+  };
   const refresh = () => {
     saveComment($s("#tCom").value);
     $s("#tTxt").value = resultText(g, { line: $s("#tLine").checked, comment: $s("#tCom").value });
