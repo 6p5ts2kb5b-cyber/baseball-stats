@@ -169,4 +169,19 @@ t("盗塁された数（投手ごと・チーム）", () => {
   assert.deepEqual([m.us.sbA, m.us.csA, m.us.sb, m.them.sb, m.them.sbA], [2, 1, 1, 2, 1]);
   assert.equal(S.pitcherLines(g).lines.p.sbA, 2);
 });
+t("相手チームの成績（打順別・投手別）", () => {
+  const g = { id: "g", first: true, log: [
+    { k: "pa", inn: 1, half: "T", side: "off", slot: 1, batter: "a", oppPitcher: "#1", ph: "R", p: "SSK", res: "K" },
+    { k: "pa", inn: 1, half: "T", side: "off", slot: 2, batter: "b", oppPitcher: "#1", ph: "R", p: "X", res: "HR", runs: 1 },
+    { k: "pa", inn: 1, half: "T", side: "off", slot: 3, batter: "c", oppPitcher: "#10", ph: "L", p: "BBBB", res: "BB" },
+    { k: "pa", inn: 1, half: "B", side: "def", slot: 1, bh: "L", pitcher: "p", p: "X", res: "2B" },
+    { k: "pa", inn: 1, half: "B", side: "def", slot: 1, bh: "L", pitcher: "p", p: "BX", res: "ADV", outs: 1 },
+    { k: "pa", inn: 1, half: "B", side: "def", slot: 2, bh: "R", pitcher: "p", p: "SKK", res: "K" },
+  ]};
+  const o = S.oppLines(g);
+  assert.equal(o.bat.length, 2);
+  assert.deepEqual([o.bat[0].pa, o.bat[0].ab, o.bat[0].h, o.bat[0].adv, o.bat[0].hand], [2, 1, 1, 1, "L"]);
+  assert.equal(o.team.ab, 2);
+  assert.deepEqual(o.pit.map((p) => [p.name, p.bf, p.outs, p.runs, p.k, p.pitches]), [["#1", 2, 1, 1, 1, 4], ["#10", 1, 0, 0, 0, 4]]);
+});
 console.log(`\nすべて成功（${n}件）`);

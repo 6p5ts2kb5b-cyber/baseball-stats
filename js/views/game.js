@@ -4,7 +4,7 @@
 import * as store from "../store.js";
 import { state } from "../store.js";
 import { esc, $, $$, toast, sheet, closeSheet, player, pname, tname, activePlayers, numberOf, HAND } from "../ui.js";
-import { gameState, gameResult, gameMisc, pitcherLines, batting, R, RESULTS, itemOuts, fmtAvg, fmtPct } from "../stats.js";
+import { gameState, gameResult, gameMisc, pitcherLines, batting, oppLines, R, RESULTS, itemOuts, fmtAvg, fmtPct } from "../stats.js";
 
 const EVTEXT = { sb: "盗塁", cs: "盗塁死", po: "牽制アウト", run: "走者生還", out: "アウト", e: "失策", wp: "暴投", pb: "捕逸" };
 
@@ -17,6 +17,25 @@ export const GAME_COLS = [
 const zero = (v) => (v ? v : `<span class="z">0</span>`);
 export const gameCells = (b) => GAME_COLS.map(([, f]) => `<td>${zero(f(b))}</td>`).join("");
 export const gameHeads = () => GAME_COLS.map(([l]) => `<th>${l}</th>`).join("");
+
+// 相手チームの成績（打順別の打撃・投手別の投球）… 画面と印刷で共通
+export function oppTables(g, H = "h2") {
+  const o = oppLines(g, state.settings);
+  const name = esc(g.opponent || "相手");
+  if (!o.bat.length && !o.pit.length) return "";
+  const cols = [["打席", "pa"], ["打数", "ab"], ["安打", "h"], ["二塁打", "s2"], ["三塁打", "s3"], ["本塁打", "hr"], ["打点", "rbi"], ["三振", "k"], ["四球", "bb"], ["死球", "hbp"], ["犠打", "sac"], ["犠飛", "sf"], ["進塁打", "adv"]];
+  const cells = (b) => cols.map(([, k]) => `<td>${zero(b[k])}</td>`).join("");
+  return `<${H}>${name}の打撃成績（打順別）</${H}>
+    <div class="tablewrap"><table class="pt wide"><thead><tr><th class="l">打順</th><th class="l">打</th><th class="l">結果</th>${cols.map(([l]) => `<th>${l}</th>`).join("")}<th>打率</th></tr></thead><tbody>
+      ${o.bat.map((b) => `<tr><td class="l">${b.slot}番</td><td class="l">${HAND[b.hand] || ""}</td><td class="l">${esc(b.res.join(" "))}</td>${cells(b)}<td>${fmtAvg(b.avg)}</td></tr>`).join("")}
+      <tr class="total"><td class="l"></td><td class="l">計</td><td></td>${cells(o.team)}<td>${fmtAvg(o.team.avg)}</td></tr>
+    </tbody></table></div>
+    <${H}>${name}の投手成績</${H}>
+    <div class="tablewrap"><table class="pt"><thead><tr><th class="l">投手</th><th>投球回</th><th>打者</th><th>球数</th><th>S率</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>暴投</th><th>失点</th></tr></thead><tbody>
+      ${o.pit.map((p) => `<tr><td class="l">${esc(p.name)}（${HAND[p.hand] || "右"}投）</td><td>${p.ipText}</td><td>${p.bf}</td><td><b>${p.pitches}</b></td><td>${fmtPct(p.strikePct)}</td><td>${p.h}</td><td>${p.k}</td><td>${p.bb + p.hbp}</td><td>${p.wp}</td><td>${p.runs}</td></tr>`).join("")}
+    </tbody></table></div>
+    <p class="muted small">相手の打者は名前を記録していないため、打順ごとにまとめています（代打なども同じ打順に入ります）。</p>`;
+}
 
 export function itemText(it, g) {
   const where = `${it.inn}回${it.half === "T" ? "表" : "裏"}`;
@@ -92,6 +111,7 @@ export function viewGame(id) {
       ${bat.map(({ pid, b, line }) => `<tr><td class="l">${(g.lineup || []).indexOf(pid) >= 0 ? (g.lineup.indexOf(pid) + 1) + ". " : ""}<a href="#/player/${pid}">${pname(pid)}</a></td><td class="l">${line.join(" ")}</td>${gameCells(b)}</tr>`).join("")}
       <tr class="total"><td class="l">チーム計</td><td></td>${gameCells(batting([g], null, state.settings))}</tr>
     </tbody></table></div>
+    ${oppTables(g)}
     ${canWrite ? `<h2>試合後に入れる記録（盗塁・失策）</h2>
     <p class="muted small">試合中に入れられなかった盗塁や、守備の失策数を選手ごとに足せます。</p>
     <div class="tablewrap"><table><thead><tr><th class="l">選手</th><th>盗塁</th><th>盗塁死</th><th>得点</th><th>失策</th></tr></thead><tbody>

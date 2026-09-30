@@ -9,10 +9,10 @@ import { esc, $, $$, player, numberOf, gradeText, activePlayers, filterBar, bind
 import { renderPage, canvasToPdf, shareFile, shareText, canShareFile, lineUrl, isPhone, downloadFile, showImageViewer } from "../share.js";
 import { gameState } from "../stats.js";
 import { batting, pitching, pitcherLines, gameResult, seasonOf, filterGames, fmtAvg, fmtPct, fmtNum, R } from "../stats.js";
-import { scoreboard, gameCells, gameHeads } from "./game.js";
+import { scoreboard, gameCells, gameHeads, oppTables } from "./game.js";
 
 const F = loadFilter();
-const opt = { who: "all", pitch: true, games: true, season: true };
+const opt = { who: "all", pitch: true, games: true, season: true, opp: true };
 const rerender = () => window.dispatchEvent(new Event("hashchange"));
 const team = () => esc(state.settings.teamName || "野球部");
 
@@ -150,6 +150,7 @@ export function viewGamePrint(id) {
       <h1>試合レポート（印刷・共有）</h1>
       <div class="card stack">
         <label class="row" style="gap:6px"><input type="checkbox" id="os" ${opt.season ? "checked" : ""}> 各選手の${season}年度の通算成績（この試合まで）も載せる</label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="oo" ${opt.opp ? "checked" : ""}> 相手チームの成績（打順別の打撃・投手）も載せる</label>
         <div class="sharebar">
           <button class="btn primary big" id="share">📤 共有する（LINEなど）</button>
           <button class="btn big" id="print">🖨 印刷する</button>
@@ -181,9 +182,11 @@ export function viewGamePrint(id) {
         <tr class="total"><td class="l"></td><td class="l">チーム計</td><td></td>${gameCells(batting([g], null, state.settings))}${opt.season ? `<td class="sep" colspan="5"></td>` : ""}</tr>
       </tbody></table>
       <p class="muted tiny">結果の記号：安＝単打 二＝二塁打 三＝三塁打 本＝本塁打 ゴ＝ゴロ 飛＝フライ 直＝ライナー 併＝併殺打 振＝三振 失＝失策 野＝野選 四＝四球 死＝死球 犠＝犠打 犠飛＝犠飛 進＝進塁打</p>
+      ${opt.opp ? oppTables(g, "h3") : ""}
     </section>`;
   return { html, after: (root) => {
     $("#os", root).onchange = (e) => { opt.season = e.target.checked; rerender(); };
+    $("#oo", root).onchange = (e) => { opt.opp = e.target.checked; rerender(); };
     $("#share", root).onclick = () => shareSheet(g, root.querySelector("section.page"));
     $("#print", root).onclick = () => window.print();
   } };

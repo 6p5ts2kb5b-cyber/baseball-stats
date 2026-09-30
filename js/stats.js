@@ -472,3 +472,55 @@ export function fmtAvg(v) {
 }
 export const fmtPct = (v) => (v == null ? "-" : (v * 100).toFixed(1) + "%");
 export const fmtNum = (v, d = 2) => (v == null ? "-" : v.toFixed(d));
+
+// ---- 相手チームの成績（1試合） --------------------------------------
+// 打者は名前を記録していないので「打順」ごとにまとめます。
+// 投手は、こちらの攻撃の記録（相手投手の名前）ごとにまとめます。
+export function oppLines(game, settings) {
+  const S = mergeSettings(settings);
+  const rules = S.abRules;
+  const bat = {};
+  for (const it of game.log || []) {
+    if (it.k !== "pa" || it.side !== "def" || !R[it.res]) continue;
+    const slot = Number(it.slot) || 0;
+    const L = (bat[slot] = bat[slot] || { slot, hand: it.bh, res: [], ...emptyBat() });
+    addBat(L, it, rules);
+    L.hand = it.bh || L.hand;
+    L.res.push(R[it.res].short);
+  }
+  const batRows = Object.values(bat).sort((a, b) => a.slot - b.slot).map(finBat);
+  const team = emptyBat();
+  for (const it of game.log || []) if (it.k === "pa" && it.side === "def" && R[it.res]) addBat(team, it, rules);
+  finBat(team);
+
+  const pit = {};
+  const order = [];
+  for (const it of game.log || []) {
+    if (it.side !== "off") continue;
+    const name = it.oppPitcher || (it.k === "pa" ? "相手投手" : null);
+    const key = name || order[order.length - 1] || "相手投手";
+    if (!pit[key]) { pit[key] = { name: key, hand: it.ph, outs: 0, bf: 0, pitches: 0, strikes: 0, h: 0, k: 0, bb: 0, hbp: 0, runs: 0, wp: 0 }; order.push(key); }
+    const P = pit[key];
+    if (it.k === "pa" && R[it.res]) {
+      P.bf++; P.hand = it.ph || P.hand;
+      const seq = (it.p || "").toUpperCase();
+      P.pitches += seq.length;
+      for (const ch of seq) if (PITCHES[ch]?.strike) P.strikes++;
+      if (R[it.res].hit) P.h++;
+      if (it.res === "K") P.k++;
+      if (it.res === "BB") P.bb++;
+      if (it.res === "HBP") P.hbp++;
+    }
+    if (it.k === "ev" && it.type === "wp") P.wp++;
+    P.runs += itemRuns(it);
+    P.outs += itemOuts(it);
+  }
+  const pitRows = order.map((k) => {
+    const P = pit[k];
+    const whole = Math.floor(P.outs / 3), frac = P.outs % 3;
+    P.ipText = frac ? (whole ? whole + "回" : "") + frac + "/3" : whole + "回";
+    P.strikePct = div(P.strikes, P.pitches);
+    return P;
+  });
+  return { bat: batRows, team, pit: pitRows };
+}
