@@ -38,7 +38,7 @@ function schedule(force) {
   cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(() => render(force));
 }
-window.addEventListener("hashchange", () => schedule(true));
+window.addEventListener("hashchange", () => { document.querySelector(".sheet-back")?.remove(); schedule(true); });
 store.onChange(() => schedule(false));
 
 function render(force) {

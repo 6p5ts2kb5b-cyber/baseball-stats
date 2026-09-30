@@ -184,4 +184,13 @@ t("相手チームの成績（打順別・投手別）", () => {
   assert.equal(o.team.ab, 2);
   assert.deepEqual(o.pit.map((p) => [p.name, p.bf, p.outs, p.runs, p.k, p.pitches]), [["#1", 2, 1, 1, 1, 4], ["#10", 1, 0, 0, 0, 4]]);
 });
+t("打球方向とカウント付きの書き方", () => {
+  assert.equal(S.playText({ res: "FO", dir: "7", p: "BBSFBFX" }), "3-2から左飛");
+  assert.equal(S.playText({ res: "2B", dir: "8", p: "X" }), "0-0から中二");
+  assert.equal(S.playNote({ res: "K", p: "BSS" }), "見三振");
+  assert.equal(S.playNote({ res: "K", p: "SKK" }), "空三振");
+  assert.equal(S.playNote({ res: "GO", dir: "6" }), "遊ゴ");
+  assert.equal(S.playNote({ res: "1B" }), "安打");
+  assert.equal(S.playNote({ res: "HR", dir: "78" }), "左中本");
+});
 console.log(`\nすべて成功（${n}件）`);

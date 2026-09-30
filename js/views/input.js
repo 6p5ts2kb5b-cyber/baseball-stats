@@ -5,7 +5,7 @@
 import * as store from "../store.js";
 import { state, newId } from "../store.js";
 import { esc, $, $$, toast, sheet, closeSheet, player, activePlayers, numberOf, HAND } from "../ui.js";
-import { gameState, liveCount, autoResult, advance, R, RESULTS } from "../stats.js";
+import { gameState, liveCount, autoResult, advance, R, RESULTS, DIRS, DIRNAME } from "../stats.js";
 import { itemText } from "./game.js";
 
 const PBTN = [["B", "ボール"], ["S", "見逃し"], ["K", "空振り"], ["F", "ファウル"], ["X", "打った！"], ["D", "死球"]];
@@ -147,6 +147,7 @@ function commit(g, p, res, o) {
   };
   if (c.side === "def") it.er = o.er ?? runs;
   if (o.fielder) it.fielder = o.fielder;
+  if (o.dir) it.dir = o.dir;
   const outsAfter = c.st.outs + it.outs;
   store.patchGame(g.id, { log: [...(g.log || []), it], cur: null, status: g.status === "final" ? "final" : "live" });
   if (outsAfter >= 3) setTimeout(() => toast("3アウト：攻守交代"), 50);
@@ -184,12 +185,14 @@ function undo(g) {
 // ---- 打った！のあとの結果選択 ----
 function resultSheet(g, np) {
   const c = ctx(g);
-  let sel = null, runs = 0, rbi = 0, er = 0, outs = 0, fielder = null;
+  let sel = null, runs = 0, rbi = 0, er = 0, outs = 0, fielder = null, dir = null;
   const draw = (el) => {
     el.innerHTML = `<h2>結果を選んでください</h2>
       <div class="rgrid">${INPLAY.map((k) => `<button class="rbtn ${R[k].hit ? "hit" : ""} ${sel === k ? "on" : ""}" data-r="${k}">${R[k].label}<span class="key">${RKEY[k]}</span></button>`).join("")}</div>
-      <p class="muted small keyhelp" style="margin:6px 0 0">キーで選んで <b>Enter</b> で確定、<b>Esc</b> でやめる</p>
+      <p class="muted small keyhelp" style="margin:6px 0 0">キーで結果を選び、続けて数字キーで打球方向、<b>Enter</b> で確定、<b>Esc</b> でやめる</p>
       ${sel ? `<div class="stack" style="margin-top:14px">
+        ${sel !== "K" ? `<div><div class="muted small" style="font-weight:700;margin-bottom:4px">打球方向（分かれば）<span class="keyhelp">　キー：1投 2捕 3一 4二 5三 6遊 7左 8中 9右</span></div>
+          <div class="nums dirs">${DIRS.map(([k, l]) => `<button data-dir="${k}" class="${dir === k ? "on" : ""}">${l}</button>`).join("")}</div></div>` : ""}
         ${numsRow("入った点", "runs", runs, 4)}
         ${numsRow("打点", "rbi", rbi, 4)}
         ${c.side === "def" ? numsRow("うち自責点", "er", er, runs) : ""}
@@ -206,19 +209,22 @@ function resultSheet(g, np) {
       draw(el);
     });
     $$("[data-fd]", el).forEach((b) => b.onclick = () => { fielder = fielder === b.dataset.fd ? null : b.dataset.fd; draw(el); });
+    $$("[data-dir]", el).forEach((b) => b.onclick = () => { dir = dir === b.dataset.dir ? null : b.dataset.dir; draw(el); });
     $$("[data-n]", el).forEach((b) => b.onclick = () => {
       const k = b.dataset.n, v = +b.dataset.v;
       if (k === "runs") { runs = v; rbi = Math.min(rbi, v) || (sel === "E" || sel === "DP" ? 0 : v); er = v; }
       if (k === "rbi") rbi = v; if (k === "er") er = v; if (k === "outs") outs = v;
       draw(el);
     });
-    $("#ok", el).onclick = () => { closeSheet(); commit(g, np, sel, { runs, rbi, er, outs, fielder: sel === "E" ? fielder : null }); };
+    $("#ok", el).onclick = () => { closeSheet(); commit(g, np, sel, { runs, rbi, er, outs, fielder: sel === "E" ? fielder : null, dir: sel === "K" ? null : dir }); };
     $("#cx", el).onclick = closeSheet;
   };
   sheet("", (el) => {
     draw(el);
     sheetKeys = (e) => {
       const k = e.key.toUpperCase();
+      // 結果を選んだあとの数字キーは打球方向（守備位置の番号）
+      if (sel && /^[1-9]$/.test(k) && sel !== "K") { e.preventDefault(); el.querySelector(`[data-dir="${k}"]`)?.click(); return; }
       const hit = Object.entries(RKEY).find(([, v]) => v === k);
       if (hit) { e.preventDefault(); el.querySelector(`[data-r="${hit[0]}"]`)?.click(); return; }
       if (e.key === "Enter" && sel) { e.preventDefault(); el.querySelector("#ok")?.click(); }

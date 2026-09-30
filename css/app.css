@@ -323,3 +323,17 @@ table.pt.wide { font-size: 11px; }
 table.pt.misc { margin-top: 6px; width: auto; min-width: 60%; }
 .misc-wrap { margin-top: 6px; border: 0; background: transparent; }
 @media print { .misc-wrap { overflow: visible; } }
+.nums.dirs button { min-width: 52px; }
+
+/* 打席経過の表 */
+table.pt.grid td.pg { text-align: left; line-height: 1.35; vertical-align: middle; min-width: 5.5em; font-size: 12px; white-space: nowrap; }
+table.pt.grid td.pg b { font-size: 14px; }
+table.pt.grid td.pg .hitc { color: var(--out); }
+table.pt.grid td.pg .rbi { font-size: 11px; color: var(--accent); font-weight: 700; }
+@media print { table.pt.grid td.pg { font-size: 8pt; } table.pt.grid td.pg b { font-size: 9.5pt; } }
+
+/* 左右に並べる（自チームと相手の打席経過） */
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.pair > div { min-width: 0; }
+@media (max-width: 1000px) { .pair { grid-template-columns: 1fr; } }
+@media print { .pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; } table.pt.grid td.pg { min-width: 0; } }

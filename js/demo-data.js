@@ -47,6 +47,8 @@ export function demoData() {
         k: "pa", id: "x" + guard, inn: st.inn, half: st.half, side, slot, p, res,
         runners: st.runners, ra: adv.ra, runs: adv.runs, rbi: adv.rbi, outs: R[res].outs,
       };
+      // 打球方向（見本用）
+      if (p.endsWith("X")) it.dir = ["GO", "DP", "SAC", "ADV", "FC", "E"].includes(res) ? pick(["1", "3", "4", "5", "6", "6", "4"]) : res === "HR" ? pick(["7", "78", "8", "9"]) : pick(["7", "8", "9", "7", "78", "89", "6", "4"]);
       if (side === "off") {
         const pl = players.find((q) => q.id === lineup[slot - 1]);
         Object.assign(it, { batter: pl.id, bh: pl.bats, ph: g.oppPitcher.hand });

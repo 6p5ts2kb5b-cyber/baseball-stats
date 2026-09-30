@@ -7,12 +7,18 @@
 import { state } from "../store.js";
 import { esc, $, $$, player, numberOf, gradeText, activePlayers, filterBar, bindFilter, loadFilter, filteredGames, filterLabel, tname, HAND, liveGames, byDate, today, jpDate, sheet, closeSheet, toast } from "../ui.js";
 import { renderPage, canvasToPdf, shareFile, shareText, canShareFile, lineUrl, isPhone, downloadFile, showImageViewer } from "../share.js";
-import { gameState } from "../stats.js";
+import { gameState, playNote } from "../stats.js";
 import { batting, pitching, pitcherLines, gameResult, seasonOf, filterGames, fmtAvg, fmtPct, fmtNum, R } from "../stats.js";
-import { scoreboard, gameCells, gameHeads, oppTables } from "./game.js";
+import { scoreboard, gameCells, gameHeads, oppTables, playGrid } from "./game.js";
 
 const F = loadFilter();
-const opt = { who: "all", pitch: true, games: true, season: true, opp: true };
+const opt = { who: "all", pitch: true, games: true, season: true, opp: true, grid: true, paper: "A4" };
+// 用紙サイズ（A4横／A3横）を印刷に反映
+function setPaper(p) {
+  let st = document.getElementById("paper-style");
+  if (!st) { st = document.createElement("style"); st.id = "paper-style"; document.head.append(st); }
+  st.textContent = `@media print { @page { size: ${p} landscape; } }`;
+}
 const rerender = () => window.dispatchEvent(new Event("hashchange"));
 const team = () => esc(state.settings.teamName || "野球部");
 
@@ -20,6 +26,7 @@ const team = () => esc(state.settings.teamName || "野球部");
 //  個人成績レポート
 // ---------------------------------------------------------------------
 export function viewReport() {
+  setPaper("A4");
   const gs = filteredGames(F).sort(byDate);
   // 対象期間に記録がある選手（在籍中の選手を背番号順）
   const hasRec = (pid) => gs.some((g) => (g.log || []).some((i) => (i.side === "off" && i.batter === pid) || (i.side === "def" && i.pitcher === pid)));
@@ -63,7 +70,7 @@ function playerPage(p, gs) {
     if (!pas.length) continue;
     const gb = batting([g], p.id, state.settings);
     cumAB += gb.ab; cumH += gb.h;
-    rows.push({ g, gb, res: pas.map((i) => R[i.res]?.short || "").join(" "), cum: cumAB ? cumH / cumAB : null });
+    rows.push({ g, gb, res: pas.map((i) => playNote(i)).join(" "), cum: cumAB ? cumH / cumAB : null });
   }
   const cnt = (b0, s0) => { const x = b.byCount[`${b0}-${s0}`]; return `<td><b>${fmtAvg(x.avg)}</b><br><span class="muted">${x.h}/${x.ab}</span></td>`; };
   return `<section class="page">
@@ -151,6 +158,8 @@ export function viewGamePrint(id) {
       <div class="card stack">
         <label class="row" style="gap:6px"><input type="checkbox" id="os" ${opt.season ? "checked" : ""}> 各選手の${season}年度の通算成績（この試合まで）も載せる</label>
         <label class="row" style="gap:6px"><input type="checkbox" id="oo" ${opt.opp ? "checked" : ""}> 相手チームの成績（打順別の打撃・投手）も載せる</label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="og2" ${opt.grid ? "checked" : ""}> 打席ごとの経過（カウント・打球方向）を載せる</label>
+        <label class="row" style="gap:6px">用紙 <select id="paper" style="width:auto"><option value="A4" ${opt.paper === "A4" ? "selected" : ""}>A4 横</option><option value="A3" ${opt.paper === "A3" ? "selected" : ""}>A3 横</option></select></label>
         <div class="sharebar">
           <button class="btn primary big" id="share">📤 共有する（LINEなど）</button>
           <button class="btn big" id="print">🖨 印刷する</button>
@@ -174,7 +183,7 @@ export function viewGamePrint(id) {
         ${ids.map((pid) => {
           const b = batting([g], pid, state.settings);
           const s = opt.season ? batting(upto, pid, state.settings) : null;
-          const res = (g.log || []).filter((i) => i.k === "pa" && i.side === "off" && i.batter === pid).map((i) => R[i.res]?.short || "").join(" ");
+          const res = (g.log || []).filter((i) => i.k === "pa" && i.side === "off" && i.batter === pid).map((i) => playNote(i)).join(" ");
           const slot = (g.lineup || []).indexOf(pid);
           return `<tr><td class="l">${slot >= 0 ? slot + 1 : ""}</td><td class="l">${esc(player(pid)?.name || "?")}</td><td class="l">${esc(res)}</td>${gameCells(b)}
             ${s ? `<td class="sep">${fmtAvg(s.avg)}</td><td>${fmtAvg(s.ops)}</td><td>${s.h}</td><td>${s.rbi}</td><td>${s.hr}</td>` : ""}</tr>`;
@@ -182,11 +191,15 @@ export function viewGamePrint(id) {
         <tr class="total"><td class="l"></td><td class="l">チーム計</td><td></td>${gameCells(batting([g], null, state.settings))}${opt.season ? `<td class="sep" colspan="5"></td>` : ""}</tr>
       </tbody></table>
       <p class="muted tiny">結果の記号：安＝単打 二＝二塁打 三＝三塁打 本＝本塁打 ゴ＝ゴロ 飛＝フライ 直＝ライナー 併＝併殺打 振＝三振 失＝失策 野＝野選 四＝四球 死＝死球 犠＝犠打 犠飛＝犠飛 進＝進塁打</p>
+      ${opt.grid ? `<div class="pair"><div>${playGrid(g, "off", "h3")}</div><div>${opt.opp ? playGrid(g, "def", "h3") : ""}</div></div>` : ""}
       ${opt.opp ? oppTables(g, "h3") : ""}
     </section>`;
   return { html, after: (root) => {
     $("#os", root).onchange = (e) => { opt.season = e.target.checked; rerender(); };
     $("#oo", root).onchange = (e) => { opt.opp = e.target.checked; rerender(); };
+    $("#og2", root).onchange = (e) => { opt.grid = e.target.checked; rerender(); };
+    $("#paper", root).onchange = (e) => { opt.paper = e.target.value; setPaper(opt.paper); };
+    setPaper(opt.paper);
     $("#share", root).onclick = () => shareSheet(g, root.querySelector("section.page"));
     $("#print", root).onclick = () => window.print();
   } };
@@ -198,6 +211,7 @@ export { $$ };
 // ---------------------------------------------------------------------
 const RF = loadFilter();
 export function viewRanking() {
+  setPaper("A4");
   const S = state.settings;
   const gs = filteredGames(RF);
   const n = gs.length;
@@ -335,7 +349,7 @@ function shareSheet(g, pageEl) {
       const blob = await new Promise((res) => cImg.toBlob(res, "image/png"));
       img = new File([blob], base + ".png", { type: "image/png" });
       const cPdf = renderPage(pageEl, 1400, 2);
-      pdf = new File([await canvasToPdf(cPdf)], base + ".pdf", { type: "application/pdf" });
+      pdf = new File([await canvasToPdf(cPdf, opt.paper)], base + ".pdf", { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       $s("#prev").innerHTML = `<img src="${url}" alt="共有する画像のプレビュー">`;
       $s("#sImg").disabled = false; $s("#sPdf").disabled = false;

@@ -4,7 +4,7 @@
 import * as store from "../store.js";
 import { state } from "../store.js";
 import { esc, $, $$, toast, sheet, closeSheet, player, pname, tname, activePlayers, numberOf, HAND } from "../ui.js";
-import { gameState, gameResult, gameMisc, pitcherLines, batting, oppLines, R, RESULTS, itemOuts, fmtAvg, fmtPct } from "../stats.js";
+import { gameState, gameResult, gameMisc, pitcherLines, batting, oppLines, R, RESULTS, DIRS, playNote, playText, countInfo, itemOuts, fmtAvg, fmtPct } from "../stats.js";
 
 const EVTEXT = { sb: "盗塁", cs: "盗塁死", po: "牽制アウト", run: "走者生還", out: "アウト", e: "失策", wp: "暴投", pb: "捕逸" };
 
@@ -17,6 +17,40 @@ export const GAME_COLS = [
 const zero = (v) => (v ? v : `<span class="z">0</span>`);
 export const gameCells = (b) => GAME_COLS.map(([, f]) => `<td>${zero(f(b))}</td>`).join("");
 export const gameHeads = () => GAME_COLS.map(([l]) => `<th>${l}</th>`).join("");
+
+// 打席ごとの経過（スコアブック風）… 打順×回の表に「3-2 / 左飛」
+export function playGrid(g, side, H = "h2") {
+  const log = (g.log || []).filter((i) => i.k === "pa" && i.side === side && R[i.res]);
+  if (!log.length) return "";
+  const n = Math.max(7, ...log.map((i) => i.inn || 0));
+  const title = side === "off" ? `${esc(state.settings.teamName || "自チーム")}の打席経過` : `${esc(g.opponent || "相手")}の打席経過`;
+  const rows = [];
+  for (let slot = 1; slot <= 9; slot++) {
+    const pas = log.filter((i) => Number(i.slot) === slot);
+    let name;
+    if (side === "off") {
+      const ids = [...new Set([...(g.lineup?.[slot - 1] ? [g.lineup[slot - 1]] : []), ...pas.map((i) => i.batter)].filter(Boolean))];
+      const inLog = [...new Set(pas.map((i) => i.batter))];
+      name = (inLog.length ? inLog : ids).map((id) => esc(player(id)?.name || "?")).join("<br>→");
+    } else {
+      const h = pas.map((i) => i.bh).filter(Boolean).pop();
+      name = `${slot}番${h ? `（${HAND[h]}）` : ""}`;
+    }
+    const cells = Array.from({ length: n }, (_, k) => {
+      const inInn = pas.filter((i) => i.inn === k + 1);
+      return `<td class="pg">${inInn.map((i) => {
+        const cnt = (i.p || "").length ? countInfo(i.p).key : "";
+        const note = playNote(i);
+        const hit = R[i.res]?.hit ? " hitc" : "";
+        return `${cnt ? `<span class="muted">${cnt}</span> ` : ""}<b class="${hit}">${esc(note)}</b>${i.rbi ? `<span class="rbi">(${i.rbi})</span>` : ""}`;
+      }).join("<br>")}</td>`;
+    }).join("");
+    rows.push(`<tr><td class="l">${slot}</td><td class="l">${name}</td>${cells}</tr>`);
+  }
+  return `<${H}>${title}</${H}>
+    <div class="tablewrap"><table class="pt grid"><thead><tr><th class="l">打順</th><th class="l">${side === "off" ? "選手" : "打者"}</th>${Array.from({ length: n }, (_, k) => `<th>${k + 1}回</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>
+    <p class="muted small">「3-2 左飛」＝ボール3・ストライク2から、レフトフライ。（ ）内は打点。中二＝センターへの二塁打、遊ゴ＝ショートゴロ、見三振＝見逃し三振。</p>`;
+}
 
 // 相手チームの成績（打順別の打撃・投手別の投球）… 画面と印刷で共通
 export function oppTables(g, H = "h2") {
@@ -48,10 +82,10 @@ export function itemText(it, g) {
     return `<span class="muted">${where}</span> ${who}${EVTEXT[it.type] || it.type}${side}${it.type === "run" && it.side === "def" && it.er === false ? "（非自責）" : ""}`;
   }
   const who = it.side === "off" ? esc(player(it.batter)?.name || "?") : `相手${it.slot}番`;
-  const r = R[it.res]?.label || it.res;
+  const r = playText(it) || R[it.res]?.label || it.res;
   const extra = [(it.runs ? `${it.runs}点` : ""), (it.rbi ? `打点${it.rbi}` : "")].filter(Boolean).join("・");
   const fd = it.res === "E" && it.fielder ? `（${esc(player(it.fielder)?.name || "")}の失策）` : "";
-  return `<span class="muted">${where}</span> ${it.slot}番 ${who}：<strong>${r}</strong>${fd}${extra ? `（${extra}）` : ""} <span class="muted small">${esc(it.p || "")}</span>`;
+  return `<span class="muted">${where}</span> ${it.slot}番 ${who}：<strong>${esc(r)}</strong>${fd}${extra ? `（${extra}）` : ""} <span class="muted small">${esc(it.p || "")}</span>`;
 }
 
 export function scoreboard(g) {
@@ -91,7 +125,7 @@ export function viewGame(id) {
   const canWrite = state.role !== "viewer";
   // 打者ごとの今日の成績
   const ids = [...new Set([...(g.lineup || []).filter(Boolean), ...(g.log || []).filter((i) => i.side === "off" && i.batter).map((i) => i.batter)])];
-  const bat = ids.map((pid) => ({ pid, b: batting([g], pid, state.settings), line: (g.log || []).filter((i) => i.k === "pa" && i.side === "off" && i.batter === pid).map((i) => R[i.res]?.short || "") }));
+  const bat = ids.map((pid) => ({ pid, b: batting([g], pid, state.settings), line: (g.log || []).filter((i) => i.k === "pa" && i.side === "off" && i.batter === pid).map((i) => playNote(i)) }));
   const log = g.log || [];
   const html = `
     <div class="row noprint"><a href="#/games" class="btn sm">‹ 試合一覧</a></div>
@@ -111,7 +145,9 @@ export function viewGame(id) {
       ${bat.map(({ pid, b, line }) => `<tr><td class="l">${(g.lineup || []).indexOf(pid) >= 0 ? (g.lineup.indexOf(pid) + 1) + ". " : ""}<a href="#/player/${pid}">${pname(pid)}</a></td><td class="l">${line.join(" ")}</td>${gameCells(b)}</tr>`).join("")}
       <tr class="total"><td class="l">チーム計</td><td></td>${gameCells(batting([g], null, state.settings))}</tr>
     </tbody></table></div>
+    ${playGrid(g, "off")}
     ${oppTables(g)}
+    ${playGrid(g, "def")}
     ${canWrite ? `<h2>試合後に入れる記録（盗塁・失策）</h2>
     <p class="muted small">試合中に入れられなかった盗塁や、守備の失策数を選手ごとに足せます。</p>
     <div class="tablewrap"><table><thead><tr><th class="l">選手</th><th>盗塁</th><th>盗塁死</th><th>得点</th><th>失策</th></tr></thead><tbody>
@@ -181,6 +217,7 @@ export function editItemSheet(g, itemId) {
       <div class="grid2">
         <label class="f">打撃結果<select name="res">${RESULTS.map((r) => `<option value="${r.c}" ${it.res === r.c ? "selected" : ""}>${r.label}</option>`).join("")}</select></label>
         <label class="f">投球（B=ボール S=見逃し K=空振り F=ファウル X=打った D=死球）<input type="text" name="p" value="${esc(it.p || "")}" pattern="[BSKFXDbskfxd]*" autocapitalize="characters"></label>
+        <label class="f">打球方向<select name="dir"><option value="">（なし・不明）</option>${DIRS.map(([k, l]) => `<option value="${k}" ${it.dir === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="f">打者の左右<select name="bh"><option value="R" ${it.bh !== "L" ? "selected" : ""}>右</option><option value="L" ${it.bh === "L" ? "selected" : ""}>左</option></select></label>
         <label class="f">投手の左右<select name="ph"><option value="R" ${it.ph !== "L" ? "selected" : ""}>右</option><option value="L" ${it.ph === "L" ? "selected" : ""}>左</option></select></label>
         <label class="f">入った点<input type="number" min="0" max="4" name="runs" value="${it.runs ?? 0}"></label>
@@ -200,6 +237,7 @@ export function editItemSheet(g, itemId) {
         res: f.res.value, p: f.p.value.toUpperCase().replace(/[^BSKFXD]/g, ""), bh: f.bh.value, ph: f.ph.value,
         runs: +f.runs.value || 0, rbi: +f.rbi.value || 0, outs: +f.outs.value || 0,
         runners: [0, 1, 2].map((i) => (f["r" + i].checked ? 1 : 0)),
+        dir: f.dir.value || null,
       };
       if (off) patch.batter = f.batter.value; else { patch.pitcher = f.pitcher.value; patch.er = +f.er.value || 0; patch.fielder = f.res.value === "E" ? f.fielder.value || null : null; }
       save(patch);

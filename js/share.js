@@ -29,8 +29,7 @@ export function renderPage(pageEl, width = 1080, scale = 2) {
 }
 
 // 印刷画面の中身を、上から順に「見出し・表・文章」に分ける
-function collect(pageEl) {
-  const out = [];
+function collect(pageEl, out = []) {
   for (const el of pageEl.children) {
     if (el.classList.contains("noprint")) continue;
     if (el.classList.contains("phead")) {
@@ -41,7 +40,8 @@ function collect(pageEl) {
     else if (el.tagName === "TABLE") out.push({ t: "table", el });
     else if (/^H[1-4]$/.test(el.tagName)) out.push({ t: "h", text: el.innerText });
     else if (el.tagName === "P") out.push({ t: "p", text: el.innerText, small: true });
-    else if (el.querySelector("table")) el.querySelectorAll("table").forEach((tb) => out.push({ t: "table", el: tb }));
+    else if (el.classList.contains("tablewrap")) out.push({ t: "table", el: el.querySelector("table") });
+    else if (el.tagName === "DIV" || el.tagName === "SECTION") collect(el, out);
   }
   return out;
 }
@@ -106,6 +106,8 @@ function drawTable(ctx, table, x, y, maxW, board, dry) {
     total: tr.classList.contains("total"),
     cells: [...tr.cells].map((td) => ({
       text: td.innerText.replace(/\s+/g, " ").trim(),
+      lines: td.classList.contains("pg") || td.querySelector("br") ? td.innerText.split("\n").map((s) => s.trim()).filter(Boolean) : null,
+      hit: !!td.querySelector(".hitc"),
       span: td.colSpan || 1,
       left: td.classList.contains("l") || td.classList.contains("team"),
       th: td.tagName === "TH",
@@ -126,7 +128,8 @@ function drawTable(ctx, table, x, y, maxW, board, dry) {
       let ci = 0;
       for (const c of r.cells) {
         if (c.span === 1) {
-          const w = (r.head && !board) ? Math.min(ctx.measureText(c.text).width, cw * 2) : ctx.measureText(c.text).width;
+          const w = (r.head && !board) ? Math.min(ctx.measureText(c.text).width, cw * 2)
+            : c.lines ? Math.max(...c.lines.map((l) => ctx.measureText(l).width), 0) : ctx.measureText(c.text).width;
           widths[ci] = Math.max(widths[ci], w);
         }
         ci += c.span;
@@ -149,7 +152,10 @@ function drawTable(ctx, table, x, y, maxW, board, dry) {
     return lines;
   };
   const heights = rows.map((r) => {
-    if (!r.head || board) return rowH;
+    if (!r.head || board) {
+      const n = Math.max(1, ...r.cells.map((c) => (c.lines ? c.lines.length : 1)));
+      return n > 1 ? Math.max(rowH, n * fs * 1.2 + fs * 0.7) : rowH;
+    }
     ctx.font = `700 ${fs * 0.85}px ${FONT}`;
     let ci = 0, n = 1;
     for (const c of r.cells) { const w = widths.slice(ci, ci + c.span).reduce((a, b) => a + b, 0); n = Math.max(n, wrap(c.text, w).length); ci += c.span; }
@@ -172,12 +178,13 @@ function drawTable(ctx, table, x, y, maxW, board, dry) {
       ctx.font = `${c.bold || r.total || (r.head && !board) ? 700 : 400} ${size}px ${FONT}`;
       ctx.fillStyle = board ? (c.gold ? C.gold : r.head ? "rgba(244,241,228,.7)" : C.boardInk) : c.faint ? "#b5bfb8" : r.head ? C.muted : C.ink;
       ctx.textBaseline = "middle";
-      const lines = r.head && !board ? wrap(c.text, w) : [c.text];
+      const lines = r.head && !board ? wrap(c.text, w) : c.lines || [c.text];
+      const center = c.lines && !c.left;
       const lh = size * 1.2;
       lines.forEach((line, li) => {
         const ty = yy + h / 2 + (li - (lines.length - 1) / 2) * lh;
-        if (board ? c.left : c.left) { ctx.textAlign = "left"; ctx.fillText(line, xx + fs * 0.45, ty); }
-        else if (board || r.head) { ctx.textAlign = "center"; ctx.fillText(line, xx + w / 2, ty); }
+        if (c.left) { ctx.textAlign = "left"; ctx.fillText(line, xx + fs * 0.45, ty); }
+        else if (board || r.head || center) { ctx.textAlign = "center"; ctx.fillText(line, xx + w / 2, ty); }
         else { ctx.textAlign = "right"; ctx.fillText(line, xx + w - fs * 0.45, ty); }
       });
       if (c.sep) { ctx.fillStyle = C.ink; ctx.fillRect(xx - 1, yy, 2, h); }
@@ -204,8 +211,9 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 // ---- 画像 → PDF（A4横。長い場合は複数ページに分けます） ----
-export async function canvasToPdf(canvas) {
-  const pageW = 842, pageH = 595, m = 24;
+export async function canvasToPdf(canvas, paper = "A4") {
+  const [pageW, pageH] = paper === "A3" ? [1191, 842] : [842, 595];
+  const m = 24;
   const scale = (pageW - m * 2) / canvas.width;
   const sliceH = Math.floor((pageH - m * 2) / scale);
   const pages = [];

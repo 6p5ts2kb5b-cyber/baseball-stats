@@ -486,7 +486,7 @@ export function oppLines(game, settings) {
     const L = (bat[slot] = bat[slot] || { slot, hand: it.bh, res: [], ...emptyBat() });
     addBat(L, it, rules);
     L.hand = it.bh || L.hand;
-    L.res.push(R[it.res].short);
+    L.res.push(playNote(it));
   }
   const batRows = Object.values(bat).sort((a, b) => a.slot - b.slot).map(finBat);
   const team = emptyBat();
@@ -523,4 +523,26 @@ export function oppLines(game, settings) {
     return P;
   });
   return { bat: batRows, team, pit: pitRows };
+}
+
+// ---- 打球方向と、新聞のような打席の書き方（例：左飛・中二・遊ゴ） ----
+// 守備位置の番号：1投 2捕 3一 4二 5三 6遊 7左 8中 9右（左中・右中も選べます）
+export const DIRS = [["1", "投"], ["2", "捕"], ["3", "一"], ["4", "二"], ["5", "三"], ["6", "遊"], ["7", "左"], ["8", "中"], ["9", "右"], ["78", "左中"], ["89", "右中"]];
+export const DIRNAME = Object.fromEntries(DIRS);
+const NOTE = { "1B": "安", "2B": "二", "3B": "三", HR: "本", GO: "ゴ", FO: "飛", LO: "直", DP: "併", E: "失", FC: "野選", SAC: "犠", SF: "犠飛", ADV: "ゴ(進)" };
+export function playNote(it) {
+  const r = R[it.res];
+  if (!r) return "";
+  if (it.res === "K") { const last = (it.p || "").slice(-1).toUpperCase(); return last === "S" ? "見三振" : last === "K" ? "空三振" : "三振"; }
+  if (it.res === "BB") return "四球";
+  if (it.res === "HBP") return "死球";
+  const d = DIRNAME[it.dir];
+  if (!d) return it.res === "ADV" ? "進塁打" : ({ "1B": "安打", "2B": "二塁打", "3B": "三塁打", HR: "本塁打" }[it.res] || r.label);
+  return d + NOTE[it.res];
+}
+// 「3-2から左飛」のように、最後の1球の直前のカウント付き
+export function playText(it) {
+  const n = playNote(it);
+  if (!(it.p || "").length) return n;
+  return `${countInfo(it.p).key}から${n}`;
 }
