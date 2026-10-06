@@ -14,6 +14,16 @@ export const today = () => {
 };
 export const thisSeason = () => seasonOf(today());
 export const HAND = { R: "右", L: "左", S: "両" };
+// 守備位置（番号は野球の守備番号。DH＝指名打者）
+export const POSITIONS = [["1", "投"], ["2", "捕"], ["3", "一"], ["4", "二"], ["5", "三"], ["6", "遊"], ["7", "左"], ["8", "中"], ["9", "右"], ["DH", "指"]];
+export const POSNAME = Object.fromEntries(POSITIONS);
+export const POSFULL = { 1: "投手", 2: "捕手", 3: "一塁手", 4: "二塁手", 5: "三塁手", 6: "遊撃手", 7: "左翼手", 8: "中堅手", 9: "右翼手", DH: "指名打者" };
+// 選手に登録した「主な守備位置」から守備番号を推測（例："遊" → "6"）
+export function guessPos(p) {
+  const s = p?.pos || "";
+  const hit = POSITIONS.find(([, n]) => s.startsWith(n));
+  return hit ? hit[0] : "";
+}
 export function jpDate(d) {
   if (!d) return "";
   const [y, m, day] = d.split("-").map(Number);

@@ -12,10 +12,12 @@ const C = {
 
 // ---- 印刷画面（.page）→ 画像（canvas） ----
 // width: 横幅（画面上のピクセル）。LINE用は1080、PDF用は1400。
-export function renderPage(pageEl, width = 1080, scale = 2) {
+export async function renderPage(pageEl, width = 1080, scale = 2) {
   const pad = 36;
   const measure = document.createElement("canvas").getContext("2d");
   const blocks = collect(pageEl);
+  // 図（SVG）は先に画像として読み込んでおく
+  for (const b of blocks) if (b.t === "img") b.img = await svgImage(b.svg);
   // 1回目：高さを計算、2回目：描く
   const h = layout(measure, blocks, width, pad, true);
   const canvas = document.createElement("canvas");
@@ -40,6 +42,7 @@ function collect(pageEl, out = []) {
     else if (el.tagName === "TABLE") out.push({ t: "table", el });
     else if (/^H[1-4]$/.test(el.tagName)) out.push({ t: "h", text: el.innerText });
     else if (el.tagName === "P") out.push({ t: "p", text: el.innerText, small: true });
+    else if (el.classList.contains("fieldwrap") && el.querySelector("svg")) out.push({ t: "img", svg: el.querySelector("svg") });
     else if (el.classList.contains("tablewrap")) out.push({ t: "table", el: el.querySelector("table") });
     else if (el.tagName === "DIV" || el.tagName === "SECTION") collect(el, out);
   }
@@ -57,8 +60,26 @@ function layout(ctx, blocks, W, pad, dry) {
       y += 38;
     } else if (b.t === "p") y = drawPara(ctx, b.text, pad, y, maxW, 15, C.muted, dry) + 4;
     else if (b.t === "table") y = drawTable(ctx, b.el, pad, y, maxW, b.board, dry) + 6;
+    else if (b.t === "img" && b.img) {
+      const vb = b.svg.viewBox.baseVal;
+      const w = Math.min(maxW, 500), h = w * (vb.height / vb.width);
+      if (!dry) ctx.drawImage(b.img, pad + (maxW - w) / 2, y + 10, w, h);
+      y += h + 20;
+    }
   }
   return y + pad;
+}
+
+function svgImage(svg) {
+  return new Promise((res) => {
+    const vb = svg.viewBox.baseVal;
+    const c = svg.cloneNode(true);
+    c.setAttribute("width", vb.width * 2); c.setAttribute("height", vb.height * 2);
+    const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(c));
+    const img = new Image();
+    img.onload = () => res(img); img.onerror = () => res(null);
+    img.src = url;
+  });
 }
 
 function drawHead(ctx, b, x, y, w, dry) {
@@ -110,8 +131,9 @@ function drawTable(ctx, table, x, y, maxW, board, dry) {
       hit: !!td.querySelector(".hitc"),
       span: td.colSpan || 1,
       left: td.classList.contains("l") || td.classList.contains("team"),
+      mid: td.classList.contains("c"),
       th: td.tagName === "TH",
-      bold: !!td.querySelector("b,strong") || td.classList.contains("r") || td.classList.contains("team"),
+      bold: !!td.querySelector("b,strong") || td.classList.contains("name") || td.classList.contains("big") || td.classList.contains("r") || td.classList.contains("team"),
       faint: td.children.length === 1 && td.firstElementChild.classList.contains("z"),
       sep: td.classList.contains("sep"),
       gold: board && td.classList.contains("r"),
@@ -179,7 +201,7 @@ function drawTable(ctx, table, x, y, maxW, board, dry) {
       ctx.fillStyle = board ? (c.gold ? C.gold : r.head ? "rgba(244,241,228,.7)" : C.boardInk) : c.faint ? "#b5bfb8" : r.head ? C.muted : C.ink;
       ctx.textBaseline = "middle";
       const lines = r.head && !board ? wrap(c.text, w) : c.lines || [c.text];
-      const center = c.lines && !c.left;
+      const center = (c.lines && !c.left) || c.mid;
       const lh = size * 1.2;
       lines.forEach((line, li) => {
         const ty = yy + h / 2 + (li - (lines.length - 1) / 2) * lh;
@@ -211,8 +233,9 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 // ---- 画像 → PDF（A4横。長い場合は複数ページに分けます） ----
-export async function canvasToPdf(canvas, paper = "A4") {
-  const [pageW, pageH] = paper === "A3" ? [1191, 842] : [842, 595];
+export async function canvasToPdf(canvas, paper = "A4", portrait = false) {
+  let [pageW, pageH] = paper === "A3" ? [1191, 842] : [842, 595];
+  if (portrait) [pageW, pageH] = [pageH, pageW];
   const m = 24;
   const scale = (pageW - m * 2) / canvas.width;
   const sliceH = Math.floor((pageH - m * 2) / scale);

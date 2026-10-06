@@ -24,6 +24,11 @@ export function viewSettings() {
     <h2>チーム名</h2>
     <div class="row"><input type="text" id="team" value="${esc(S.teamName)}" ${admin ? "" : "disabled"} style="max-width:320px">${admin ? `<button class="btn" id="saveteam">保存</button>` : ""}</div>
 
+    <h2>スタッフ（メンバー表に載ります）</h2>
+    <div class="card"><div class="grid2">
+      ${[["manager", "監督"], ["director", "部長"], ["coach", "コーチ"], ["scorer", "スコアラー"]].map(([k, n]) => `<label class="f">${n}<input type="text" data-staff="${k}" value="${esc(S.staff?.[k] || "")}" ${admin ? "" : "disabled"}></label>`).join("")}
+    </div>${admin ? `<div class="row" style="margin-top:10px"><button class="btn" id="savestaff">保存</button></div>` : ""}</div>
+
     <h2>大会区分</h2>
     <p class="muted small">名前を変えても、過去の試合の区分はそのまま引き継がれます。使わなくなった区分は「隠す」にしてください。</p>
     <div class="card stack" style="gap:6px">
@@ -76,6 +81,7 @@ export function viewSettings() {
     $("#addp", root)?.addEventListener("click", () => playerSheet(null));
     $$("[data-editp]", root).forEach((b) => b.onclick = () => playerSheet(b.dataset.editp));
     $("#saveteam", root)?.addEventListener("click", () => { saveS({ teamName: $("#team", root).value.trim() || "野球部" }); toast("保存しました"); });
+    $("#savestaff", root)?.addEventListener("click", () => { saveS({ staff: Object.fromEntries($$("[data-staff]", root).map((i) => [i.dataset.staff, i.value.trim()])) }); toast("保存しました"); });
     // 大会区分
     const tl = () => tournaments(true).map((t) => ({ ...t }));
     const saveT = (arr) => saveS({ tournaments: arr.map((t, i) => ({ ...t, order: i })) });
@@ -133,7 +139,7 @@ export function viewSettings() {
 
 function saveS(patch) {
   const S = state.settings;
-  store.saveSettings({ teamName: S.teamName, innings: S.innings, qs: S.qs, qual: S.qual, abRules: S.abRules, tournaments: S.tournaments, ...patch });
+  store.saveSettings({ teamName: S.teamName, innings: S.innings, qs: S.qs, qual: S.qual, abRules: S.abRules, tournaments: S.tournaments, staff: S.staff || {}, ...patch });
 }
 
 function playerSheet(id) {

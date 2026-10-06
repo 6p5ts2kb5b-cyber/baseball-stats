@@ -257,7 +257,7 @@ async function startDemo() {
   state.user = { email: "demo@example.com", name: "お試し", uid: "demo", verified: true };
   state.role = "admin";
   state.players = d.players; state.games = d.games;
-  state.settings = mergeSettings(null);
+  state.settings = mergeSettings({ teamName: "見本中学校", staff: { manager: "見本 監督", director: "見本 部長", coach: "見本 コーチ", scorer: "見本 記録" } });
   state.authChecked = true; state.ready = true;
   emit();
 }

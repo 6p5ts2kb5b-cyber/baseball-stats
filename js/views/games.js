@@ -3,7 +3,7 @@
 // =====================================================================
 import * as store from "../store.js";
 import { state } from "../store.js";
-import { esc, $, $$, liveGames, tournaments, activePlayers, today, thisSeason, numberOf, HAND, seasons } from "../ui.js";
+import { esc, $, $$, liveGames, tournaments, activePlayers, today, thisSeason, numberOf, HAND, seasons, POSITIONS, guessPos, player } from "../ui.js";
 import { filterGames, seasonOf } from "../stats.js";
 import { gameCard } from "../app.js";
 
@@ -36,7 +36,8 @@ export function viewGameEdit(id) {
   const prev = liveGames().filter((g) => g.lineup?.length).sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.no ?? 0) - (a.no ?? 0))[0];
   const g = orig || {
     date, no: nextNo(seasonOf(date)), opponent: "", tournamentId: tournaments()[tournaments().length - 1]?.id || "",
-    first: true, lineup: prev?.lineup?.slice() || [], pitcher: prev?.pitcher || "", oppPitcher: { name: "", hand: "R" }, oppHands: {},
+    first: true, lineup: prev?.lineup?.slice() || [], positions: prev?.positions?.slice() || [], bench: prev?.bench?.slice() || null,
+    pitcher: prev?.pitcher || "", oppPitcher: { name: "", hand: "R" }, oppHands: {},
   };
   const pls = activePlayers();
   const popt = (sel) => `<option value="">（選択）</option>` + pls.map((p) => `<option value="${p.id}" ${sel === p.id ? "selected" : ""}>${numberOf(p) !== "" ? "#" + esc(numberOf(p)) + " " : ""}${esc(p.name)}</option>`).join("");
@@ -58,9 +59,17 @@ export function viewGameEdit(id) {
         <p class="muted small" id="dupwarn" hidden></p>
       </div>
       <div class="card stack">
-        <strong>スタメン（打順）</strong>
-        <p class="muted small" style="margin:0">前の試合のスタメンが入っています。試合中の選手交代は入力画面でもできます。</p>
-        <div class="stack">${Array.from({ length: 9 }, (_, i) => `<label class="row"><span style="width:36px;font-weight:800">${i + 1}番</span><select class="grow" name="l${i}">${popt(g.lineup?.[i])}</select></label>`).join("")}</div>
+        <strong>スタメン（打順と守備位置）</strong>
+        <p class="muted small" style="margin:0">前の試合のスタメンが入っています。選手を選ぶと、登録した「主な守備位置」が自動で入ります。試合中の選手交代は入力画面でもできます。</p>
+        <div class="stack lineup-rows">${Array.from({ length: 9 }, (_, i) => `<div class="row lrow"><span class="lno">${i + 1}番</span>
+          <select class="grow" name="l${i}" aria-label="${i + 1}番の選手">${popt(g.lineup?.[i])}</select>
+          <select class="lpos" name="p${i}" aria-label="${i + 1}番の守備位置"><option value="">守備</option>${POSITIONS.map(([k, n]) => `<option value="${k}" ${(g.positions?.[i] ?? guessPos(player(g.lineup?.[i]))) === k ? "selected" : ""}>${k === "DH" ? "DH 指名" : k + " " + n}</option>`).join("")}</select></div>`).join("")}</div>
+        <p class="small" id="lwarn" hidden style="color:var(--out);margin:0"></p>
+      </div>
+      <div class="card stack">
+        <strong>控え選手（ベンチ入り）</strong>
+        <p class="muted small" style="margin:0">メンバー表に載せる控えの選手にチェックを入れてください。スタメンの選手は自動で外れます。</p>
+        <div class="benchgrid" id="bench">${pls.map((p) => `<label class="row bitem"><input type="checkbox" value="${p.id}" ${g.bench ? (g.bench.includes(p.id) ? "checked" : "") : "checked"}> <span>${numberOf(p) !== "" ? "#" + esc(numberOf(p)) + " " : ""}${esc(p.name)}</span></label>`).join("")}</div>
       </div>
       <div class="card stack">
         <div class="grid2">
@@ -89,13 +98,34 @@ export function viewGameEdit(id) {
     };
     f.no.oninput = checkDup; f.date.onchange = () => { if (!orig) f.no.value = nextNo(seasonOf(f.date.value)); checkDup(); };
     checkDup();
+    // 選手を選んだら守備位置を自動で入れる／重なりを知らせる
+    const checkLineup = () => {
+      const ps = Array.from({ length: 9 }, (_, i) => f["l" + i].value).filter(Boolean);
+      const pos = Array.from({ length: 9 }, (_, i) => f["p" + i].value).filter(Boolean);
+      const dupP = ps.filter((x, i) => ps.indexOf(x) !== i);
+      const dupPos = pos.filter((x, i) => pos.indexOf(x) !== i);
+      const msg = [dupP.length ? "同じ選手が2回入っています" : "", dupPos.length ? `守備位置「${dupPos.join("・")}」が重なっています` : ""].filter(Boolean).join("／");
+      const w = $("#lwarn", root); w.hidden = !msg; w.textContent = msg ? "⚠ " + msg : "";
+      // スタメンの選手は控えから外す
+      $$("#bench input", root).forEach((c) => { const inL = ps.includes(c.value); c.closest("label").style.opacity = inL ? .35 : 1; c.disabled = inL; });
+    };
+    for (let i = 0; i < 9; i++) {
+      f["l" + i].addEventListener("change", () => { const gp = guessPos(player(f["l" + i].value)); if (gp && !f["p" + i].value) f["p" + i].value = gp; checkLineup(); });
+      f["p" + i].addEventListener("change", checkLineup);
+    }
+    checkLineup();
     f.onsubmit = (e) => {
       e.preventDefault();
       const lineup = Array.from({ length: 9 }, (_, i) => f["l" + i].value || null);
+      const positions = Array.from({ length: 9 }, (_, i) => f["p" + i].value || null);
+      const bench = $$("#bench input", root).filter((c) => c.checked && !lineup.includes(c.value)).map((c) => c.value);
+      // 先発投手が空なら、守備位置「1（投）」の選手にする
+      let pitcher = f.pitcher.value || null;
+      if (!pitcher) { const k = positions.indexOf("1"); if (k >= 0) pitcher = lineup[k]; }
       const data = {
         ...(orig || { log: [], status: "live", oppHands: {} }),
         date: f.date.value, no: Number(f.no.value), opponent: f.opponent.value.trim(), venue: f.venue.value.trim(), tournamentId: f.tournamentId.value,
-        first, lineup, pitcher: f.pitcher.value || null,
+        first, lineup, positions, bench, pitcher,
         oppPitcher: { name: f.oppName.value.trim(), hand },
       };
       const newId = store.saveGame(data);

@@ -5,7 +5,7 @@
 //  A4で印刷できます。PDFにしたいときは、印刷画面で「PDFに保存」を選びます。
 // =====================================================================
 import { state } from "../store.js";
-import { esc, $, $$, player, numberOf, gradeText, activePlayers, filterBar, bindFilter, loadFilter, filteredGames, filterLabel, tname, HAND, liveGames, byDate, today, jpDate, sheet, closeSheet, toast } from "../ui.js";
+import { esc, $, $$, player, numberOf, gradeText, activePlayers, filterBar, bindFilter, loadFilter, filteredGames, filterLabel, tname, HAND, liveGames, byDate, today, jpDate, sheet, closeSheet, toast, POSNAME, POSFULL, guessPos } from "../ui.js";
 import { renderPage, canvasToPdf, shareFile, shareText, canShareFile, lineUrl, isPhone, downloadFile, showImageViewer } from "../share.js";
 import { gameState, playNote } from "../stats.js";
 import { batting, pitching, pitcherLines, gameResult, seasonOf, filterGames, fmtAvg, fmtPct, fmtNum, R } from "../stats.js";
@@ -14,10 +14,11 @@ import { scoreboard, gameCells, gameHeads, oppTables, playGrid } from "./game.js
 const F = loadFilter();
 const opt = { who: "all", pitch: true, games: true, season: true, opp: true, grid: true, paper: "A4" };
 // 用紙サイズ（A4横／A3横）を印刷に反映
-function setPaper(p) {
+function setPaper(p, orient = "landscape") {
+  if (orient === "landscape") opt.portrait = false;
   let st = document.getElementById("paper-style");
   if (!st) { st = document.createElement("style"); st.id = "paper-style"; document.head.append(st); }
-  st.textContent = `@media print { @page { size: ${p} landscape; } }`;
+  st.textContent = `@media print { @page { size: ${p} ${orient}; } }`;
 }
 const rerender = () => window.dispatchEvent(new Event("hashchange"));
 const team = () => esc(state.settings.teamName || "野球部");
@@ -144,6 +145,7 @@ function pitcherPart(pid, gs, pit) {
 export function viewGamePrint(id) {
   const g = state.games.find((x) => x.id === id);
   if (!g) return { html: `<div class="empty">試合が見つかりません。</div>` };
+  opt.portrait = false;
   const r = gameResult(g);
   // その試合までの、同じ年度の試合（通算成績用）
   const season = seasonOf(g.date);
@@ -317,8 +319,8 @@ export function resultText(g, { line = true, comment = "" } = {}) {
   return rows.join("\n");
 }
 
-function shareSheet(g, pageEl) {
-  const base = `試合結果_${(g.date || "").replace(/-/g, "")}_vs${(g.opponent || "").replace(/[\\/:*?"<>|\s]/g, "")}`;
+export function shareSheet(g, pageEl, kind = "試合結果") {
+  const base = `${kind}_${(g.date || "").replace(/-/g, "")}_vs${(g.opponent || "").replace(/[\\/:*?"<>|\s]/g, "")}`;
   let img = null, pdf = null;
   const el = sheet(`<h2>共有する</h2>
     <p class="muted small" style="margin-top:-6px">スマホでは、ボタンを押すと共有メニューが開きます。そこで「LINE」を選んでください。</p>
@@ -345,11 +347,11 @@ function shareSheet(g, pageEl) {
   // 画像とPDFを先に作っておく（共有ボタンを押したらすぐ共有メニューが開くように）
   setTimeout(async () => {
     try {
-      const cImg = renderPage(pageEl, 1080, 2);
+      const cImg = await renderPage(pageEl, 1080, 2);
       const blob = await new Promise((res) => cImg.toBlob(res, "image/png"));
       img = new File([blob], base + ".png", { type: "image/png" });
-      const cPdf = renderPage(pageEl, 1400, 2);
-      pdf = new File([await canvasToPdf(cPdf, opt.paper)], base + ".pdf", { type: "application/pdf" });
+      const cPdf = await renderPage(pageEl, opt.portrait ? 1000 : 1400, 2);
+      pdf = new File([await canvasToPdf(cPdf, opt.paper, opt.portrait)], base + ".pdf", { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       $s("#prev").innerHTML = `<img src="${url}" alt="共有する画像のプレビュー">`;
       $s("#sImg").disabled = false; $s("#sPdf").disabled = false;
@@ -385,4 +387,90 @@ function shareSheet(g, pageEl) {
   $s("#tShare").onclick = async () => done(await shareText($s("#tTxt").value));
   $s("#tCopy").onclick = async () => { try { await navigator.clipboard.writeText($s("#tTxt").value); toast("コピーしました"); } catch { $s("#tTxt").select(); } };
   $s("#cx").onclick = closeSheet;
+}
+
+
+// ---------------------------------------------------------------------
+//  メンバー表（打順・守備位置・控え・守備配置図）… 印刷・共有
+// ---------------------------------------------------------------------
+// 守備配置図（グラウンドの上に選手名）
+const FIELD_XY = { 7: [92, 118], 8: [250, 62], 9: [408, 118], 6: [178, 205], 4: [322, 205], 5: [118, 300], 3: [382, 300], 1: [250, 296], 2: [250, 404] };
+export function fieldSvg(lineup, positions) {
+  const tag = (pos) => {
+    const k = (positions || []).map(String).indexOf(String(pos));
+    const p = k >= 0 ? player(lineup[k]) : null;
+    const [x, y] = FIELD_XY[pos];
+    const no = p ? numberOf(p) : "";
+    const name = p ? p.name : "―";
+    const w = Math.max(96, name.length * 17 + 34);
+    return `<g transform="translate(${x} ${y})">
+      <rect x="${-w / 2}" y="-19" width="${w}" height="38" rx="19" fill="#ffffff" stroke="#183326" stroke-width="2"/>
+      <circle cx="${-w / 2 + 19}" cy="0" r="15" fill="#183326"/>
+      <text x="${-w / 2 + 19}" y="5" text-anchor="middle" font-size="13" font-weight="800" fill="#ffd966">${pos}</text>
+      <text x="${-w / 2 + 40}" y="6" font-size="16" font-weight="700" fill="#16241c">${esc(name)}</text>
+      ${no !== "" ? `<text x="${w / 2 - 10}" y="-24" text-anchor="end" font-size="11" font-weight="700" fill="#5b6a61">#${esc(no)}</text>` : ""}
+    </g>`;
+  };
+  return `<svg class="field" viewBox="0 0 500 450" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="守備配置図" font-family="Hiragino Sans, Noto Sans JP, Noto Sans CJK JP, Meiryo, sans-serif">
+    <rect width="500" height="450" rx="18" fill="#2f7a4d"/>
+    <path d="M250 430 L30 210 A311 311 0 0 1 470 210 Z" fill="#3c8a5a"/>
+    <path d="M250 430 L130 310 L250 190 L370 310 Z" fill="#c9a36b"/>
+    <path d="M250 412 L148 310 L250 208 L352 310 Z" fill="#3c8a5a"/>
+    <circle cx="250" cy="300" r="22" fill="#c9a36b"/>
+    <path d="M250 430 L30 210 M250 430 L470 210" stroke="#f4f1e4" stroke-width="2.5" opacity=".8"/>
+    ${[[250, 424], [370, 310], [250, 190], [130, 310]].map(([x, y]) => `<rect x="${x - 7}" y="${y - 7}" width="14" height="14" fill="#fff" transform="rotate(45 ${x} ${y})"/>`).join("")}
+    ${[7, 8, 9, 6, 4, 5, 3, 1, 2].map(tag).join("")}
+  </svg>`;
+}
+
+export function viewMembers(id) {
+  const g = state.games.find((x) => x.id === id);
+  if (!g) return { html: `<div class="empty">試合が見つかりません。</div>` };
+  setPaper("A4", "portrait");
+  opt.portrait = true; opt.paper = "A4";
+  const S = state.settings;
+  const lineup = g.lineup || [];
+  const positions = g.positions || lineup.map((pid) => guessPos(player(pid)));
+  const dh = positions.includes("DH");
+  const bench = (g.bench || []).filter((pid) => !lineup.includes(pid)).map(player).filter(Boolean);
+  const staff = S.staff || {};
+  const row = (i) => {
+    const p = player(lineup[i]);
+    const pos = positions[i];
+    return `<tr><td class="c big">${i + 1}</td><td class="c"><b>${pos || ""}</b></td><td class="l">${pos ? POSFULL[pos] : ""}</td><td class="c">${p ? esc(numberOf(p)) : ""}</td><td class="l name">${p ? esc(p.name) : ""}</td><td class="c">${p ? esc(gradeText(p)) : ""}</td><td class="c">${p ? `${HAND[p.throws] || "右"}投${HAND[p.bats] || "右"}打` : ""}</td></tr>`;
+  };
+  const html = `
+    <div class="noprint">
+      <div class="row"><a href="#/game/${g.id}" class="btn sm">‹ 試合の記録</a></div>
+      <h1>メンバー表</h1>
+      <div class="card stack">
+        <div class="sharebar">
+          <button class="btn primary big" id="share">📤 共有する（LINEなど）</button>
+          <button class="btn big" id="print">🖨 印刷する（A4縦）</button>
+          <a class="btn big" href="#/game/${g.id}/edit">打順・守備位置を直す</a>
+        </div>
+        <p class="muted small" style="margin:0">監督・コーチなどの名前は「設定 → チーム名」の下で登録できます。</p>
+      </div>
+    </div>
+    <section class="page members">
+      <header class="phead"><div><div class="muted small">${team()}　メンバー表</div>
+        <div class="pname">vs ${esc(g.opponent || "")} <span>${g.first !== false ? "先攻" : "後攻"}</span></div></div>
+        <div class="small" style="text-align:right">${esc(jpDate(g.date))}　第${g.no}試合<br>${esc(tname(g.tournamentId))}${g.venue ? `<br>会場：${esc(g.venue)}` : ""}</div></header>
+      <h3>先発メンバー</h3>
+      <table class="pt mtable"><thead><tr><th class="c">打順</th><th class="c">守備</th><th class="l">位置</th><th class="c">背番号</th><th class="l">氏名</th><th class="c">学年</th><th class="c">投打</th></tr></thead>
+        <tbody>${Array.from({ length: 9 }, (_, i) => row(i)).join("")}
+        ${dh ? `<tr><td class="c big">P</td><td class="c"><b>1</b></td><td class="l">投手</td><td class="c">${esc(numberOf(player(g.pitcher)))}</td><td class="l name">${esc(player(g.pitcher)?.name || "")}</td><td class="c">${esc(gradeText(player(g.pitcher)))}</td><td class="c"></td></tr>` : ""}</tbody></table>
+      <div class="fieldwrap">${fieldSvg(lineup, positions)}</div>
+      <h3>控え選手（${bench.length}人）</h3>
+      <table class="pt mtable"><thead><tr><th class="c">背番号</th><th class="l">氏名</th><th class="c">学年</th><th class="c">投打</th><th class="l">主な守備</th></tr></thead>
+        <tbody>${bench.map((p) => `<tr><td class="c">${esc(numberOf(p))}</td><td class="l name">${esc(p.name)}</td><td class="c">${esc(gradeText(p))}</td><td class="c">${HAND[p.throws] || "右"}投${HAND[p.bats] || "右"}打</td><td class="l">${esc(p.pos || "")}</td></tr>`).join("") || `<tr><td class="l" colspan="5">（なし）</td></tr>`}</tbody></table>
+      <h3>スタッフ</h3>
+      <table class="pt mtable"><tbody>
+        ${[["監督", staff.manager], ["部長", staff.director], ["コーチ", staff.coach], ["スコアラー", staff.scorer]].map(([k, v]) => `<tr><th class="l" style="width:8em">${k}</th><td class="l name">${esc(v || "")}</td></tr>`).join("")}
+      </tbody></table>
+    </section>`;
+  return { html, after: (root) => {
+    $("#print", root).onclick = () => window.print();
+    $("#share", root).onclick = () => { opt.portrait = true; shareSheet(g, root.querySelector("section.page"), "メンバー表"); };
+  } };
 }

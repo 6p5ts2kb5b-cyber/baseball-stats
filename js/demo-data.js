@@ -12,14 +12,17 @@ export function demoData() {
     throws: i % 4 === 3 ? "L" : "R", bats: i % 3 === 2 ? "L" : "R",
     pos: ["投", "捕", "一", "二", "三", "遊", "左", "中", "右", "投", "外"][i], active: true,
   }));
-  const lineup = players.slice(0, 9).map((p) => p.id);
+  // 打順（遊・二・中・一・三・左・右・捕・投）
+  const order = [6, 4, 8, 3, 5, 7, 9, 2, 1];
+  const lineup = order.map((k) => "p" + k);
+  const positions = order.map(String);
   const games = [];
   const opps = ["見本中A", "見本中B", "見本中C", "見本中D"];
   const tours = ["t9", "t9", "t3", "t3"];
   for (let gi = 0; gi < 4; gi++) {
     const g = {
       id: "g" + (gi + 1), no: gi + 1, date: `2026-0${5 + gi}-1${gi}`, opponent: opps[gi],
-      tournamentId: tours[gi], first: gi % 2 === 0, lineup, oppHands: {}, status: "final",
+      tournamentId: tours[gi], first: gi % 2 === 0, lineup, positions, bench: ["p10", "p11"], venue: "見本グラウンド", oppHands: {}, status: "final",
       pitcher: gi % 2 ? "p10" : "p1", oppPitcher: { name: "相手投手", hand: gi % 2 ? "L" : "R" }, log: [],
     };
     for (let s = 1; s <= 9; s++) g.oppHands[s] = s % 3 === 0 ? "L" : "R";

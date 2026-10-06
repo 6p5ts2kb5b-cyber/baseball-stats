@@ -11,7 +11,7 @@ import { viewInput } from "./views/input.js";
 import { viewGame } from "./views/game.js";
 import { viewBatting, viewPitching, viewPlayer } from "./views/statsview.js";
 import { viewSettings } from "./views/settings.js";
-import { viewReport, viewGamePrint, viewRanking } from "./views/print.js";
+import { viewReport, viewGamePrint, viewRanking, viewMembers } from "./views/print.js";
 
 const app = document.getElementById("app");
 
@@ -24,6 +24,7 @@ const routes = [
   { re: /^#\/game\/([\w-]+)\/edit$/, view: (id) => viewGameEdit(id), live: false, nav: "games" },
   { re: /^#\/game\/([\w-]+)\/input$/, view: viewInput, live: true, nav: "games", bare: true },
   { re: /^#\/game\/([\w-]+)\/print$/, view: viewGamePrint, live: true, nav: "games" },
+  { re: /^#\/game\/([\w-]+)\/members$/, view: viewMembers, live: true, nav: "games" },
   { re: /^#\/game\/([\w-]+)$/, view: viewGame, live: true, nav: "games" },
   { re: /^#\/report$/, view: viewReport, live: true, nav: "report" },
   { re: /^#\/ranking$/, view: viewRanking, live: true, nav: "ranking" },
