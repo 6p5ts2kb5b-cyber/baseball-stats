@@ -149,7 +149,7 @@ function commit(g, p, res, o) {
   if (o.fielder) it.fielder = o.fielder;
   if (o.dir) it.dir = o.dir;
   const outsAfter = c.st.outs + it.outs;
-  store.patchGame(g.id, { log: [...(g.log || []), it], cur: null, status: g.status === "final" ? "final" : "live" });
+  store.appendLog(g.id, [it], { cur: null, status: g.status === "final" ? "final" : "live" });
   if (outsAfter >= 3) setTimeout(() => toast("3アウト：攻守交代"), 50);
   return it;
 }
@@ -161,8 +161,7 @@ function addEvent(g, type, extra = {}) {
   const rs = c.runners.slice();
   if (type === "run") rs[2] = 0;
   const outsAfter = c.st.outs + (["cs", "po", "out"].includes(type) ? 1 : 0);
-  store.patchGame(g.id, {
-    log: [...(g.log || []), ev],
+  store.appendLog(g.id, [ev], {
     cur: outsAfter >= 3 ? null : { inn: c.st.inn, half: c.st.half, p: c.p, runners: rs, slot: c.cur?.slot || null },
   });
   closeSheet();
@@ -178,7 +177,7 @@ function undo(g) {
   const cur = last.k === "pa"
     ? { inn: last.inn, half: last.half, p: (last.p || "").slice(0, -1), runners: last.runners || [0, 0, 0], slot: last.slot }
     : null;
-  store.patchGame(g.id, { log: log.slice(0, -1), cur });
+  store.removeLogItem(g.id, last, { cur });
   toast(last.k === "pa" ? "前の打席の最後の1球を戻しました" : `${EV[last.type] || "記録"}を取り消しました`);
 }
 
@@ -288,7 +287,7 @@ function moreSheet(g) {
       const gg = state.games.find((x) => x.id === g.id), cc = ctx(gg);
       const need = 3 - cc.st.outs;
       const evs = Array.from({ length: need }, () => ({ k: "ev", id: newId(), inn: cc.st.inn, half: cc.st.half, side: cc.side, type: "out", pitcher: cc.side === "def" ? cc.pitcher : undefined, ts: new Date().toISOString() }));
-      store.patchGame(gg.id, { log: [...(gg.log || []), ...evs], cur: null });
+      store.appendLog(gg.id, evs, { cur: null });
       closeSheet(); toast("攻守交代しました");
     };
     $("#fin", el).onclick = () => {

@@ -128,8 +128,10 @@ export function viewGameEdit(id) {
         first, lineup, positions, bench, pitcher,
         oppPitcher: { name: f.oppName.value.trim(), hand },
       };
+      // すでにある試合は、試合情報とスタメンだけを保存（入力済みの打席には触らない）
+      if (orig) { store.saveGameInfo(orig.id, data); location.hash = `#/game/${orig.id}`; return; }
       const newId = store.saveGame(data);
-      location.hash = orig ? `#/game/${orig.id}` : `#/game/${newId}/input`;
+      location.hash = `#/game/${newId}/input`;
     };
   };
   return { html, after };

@@ -66,7 +66,10 @@ function shell(html, opt = {}) {
   app.innerHTML = `${topbar()}${opt.nonav || opt.bare ? "" : navbar(opt.nav)}
     <main>${state.error && state.user ? `<div class="alert err noprint" style="margin-bottom:12px">${esc(state.error)} <button class="btn sm" id="errx">閉じる</button></div>` : ""}${html}</main>`;
   $("#errx")?.addEventListener("click", () => { state.error = null; schedule(true); });
-  $("#logout")?.addEventListener("click", async () => { if (confirm("ログアウトしますか？")) await store.signOut(); });
+  $("#logout")?.addEventListener("click", async () => {
+    if (state.pendingWrites) { alert("まだ送信中の記録があります。電波のある所で「送信中…」が消えてから、ログアウトしてください。"); return; }
+    if (confirm("ログアウトしますか？")) await store.signOut();
+  });
   opt.after?.(app);
   if (opt.keepScroll) window.scrollTo(0, y);
 }
@@ -202,8 +205,35 @@ export function gameCard(g) {
     <span style="text-align:right"><span class="score">${r.us}-${r.them}</span><br>${fin ? `<span class="chip ${r.wl === "勝" ? "win" : r.wl === "負" ? "lose" : ""}">${r.wl}</span>` : `<span class="chip live">入力中</span>`}</span></a>`;
 }
 
+// ---- 新しい版のお知らせ ----
+// アプリを更新したら version.json の数字を変えます。開いたままの端末にも
+// 「新しい版があります」と出して、読み込み直してもらいます（古い版のまま入力し続けないように）。
+const APP_VERSION = "2026.10.06-1";
+async function checkVersion() {
+  if (store.isDemo || location.protocol !== "https:") return;
+  try {
+    const r = await fetch("./version.json?t=" + Date.now(), { cache: "no-store" });
+    const v = (await r.json()).version;
+    if (v && v !== APP_VERSION) showUpdateBar();
+  } catch {}
+}
+function showUpdateBar() {
+  if (document.getElementById("updbar")) return;
+  const el = document.createElement("div");
+  el.id = "updbar"; el.className = "updbar noprint";
+  el.innerHTML = `<span>アプリの新しい版があります。読み込み直してください。</span><button class="btn sm" id="updgo">読み込み直す</button>`;
+  document.body.append(el);
+  el.querySelector("#updgo").onclick = () => {
+    if (state.pendingWrites) { alert("まだ送信中の記録があります。画面上の「送信中…」が消えてから、もう一度押してください。"); return; }
+    location.reload();
+  };
+}
+setInterval(checkVersion, 3 * 60 * 1000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVersion(); });
+
 // ---- 起動 ----
 store.start();
+checkVersion();
 if ("serviceWorker" in navigator && !store.isDemo && location.protocol === "https:") {
   navigator.serviceWorker.register("./sw.js").catch((e) => console.warn("SW", e));
 }

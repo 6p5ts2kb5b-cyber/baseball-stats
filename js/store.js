@@ -7,7 +7,8 @@
 import { firebaseConfig, OWNER_EMAIL, FIREBASE_VERSION } from "./firebase-config.js";
 import { mergeSettings } from "./stats.js";
 
-const DEMO = new URLSearchParams(location.search).has("demo");
+const HAS_DOM = typeof window !== "undefined";
+const DEMO = HAS_DOM && new URLSearchParams(location.search).has("demo");
 const CDN = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
 
 const listeners = new Set();
@@ -21,20 +22,25 @@ export const state = {
   players: [],
   games: [],
   members: [],
-  online: navigator.onLine,
+  online: HAS_DOM ? navigator.onLine : true,
   pendingWrites: false,
   error: null,
 };
 export function onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 function emit() { for (const fn of listeners) try { fn(state); } catch (e) { console.error(e); } }
 
-window.addEventListener("online", () => { state.online = true; emit(); });
-window.addEventListener("offline", () => { state.online = false; emit(); });
+if (HAS_DOM) {
+  window.addEventListener("online", () => { state.online = true; emit(); });
+  window.addEventListener("offline", () => { state.online = false; emit(); });
+  // まだ送っていない記録があるのに画面を閉じようとしたら止める
+  window.addEventListener("beforeunload", (e) => { if (state.pendingWrites) { e.preventDefault(); e.returnValue = ""; } });
+}
 
 export const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const clean = (o) => JSON.parse(JSON.stringify(o)); // undefined を取り除く
 
 let fb = null; // Firebase の部品
+export function __setFirebaseForTest(fake) { fb = fake; } // テスト用
 
 // ---------------------------------------------------------------------
 //  起動
@@ -185,6 +191,8 @@ export function savePlayer(p) {
   return id;
 }
 
+// 新しい試合を作るとき（とバックアップから戻すとき）だけ使います。
+// すでにある試合の変更は saveGameInfo / appendLog などを使ってください。
 export function saveGame(g) {
   const id = g.id || newId();
   const data = clean(stamp({ ...g, id: undefined }));
@@ -193,8 +201,68 @@ export function saveGame(g) {
   return id;
 }
 
-// 試合の一部だけ更新（1球ごとの入力など）
+// =====================================================================
+//  ★ 記録を消さないための書き込み方
+//  試合の記録（log＝打席と出来事の並び）は、配列を丸ごと書き直さず、
+//  「1つ足す」「1つ消す」「1つ直す」の操作だけを送ります。
+//  こうすると、2台の端末で同じ試合を入力したり、圏外だった端末が
+//  あとからまとめて送ったりしても、相手が入れた記録を消しません。
+// =====================================================================
+const sameItem = (a, b) => a && b && a.id === b.id;
+function localGame(id, fn) {
+  state.games = state.games.map((x) => (x.id === id ? fn(x) : x));
+  emit();
+}
+
+// 記録を足す（打席・盗塁など）
+export function appendLog(id, items, extra = {}) {
+  items = clean(items);
+  const data = clean(stamp(extra));
+  localGame(id, (x) => ({ ...x, ...data, log: [...(x.log || []), ...items.filter((it) => !(x.log || []).some((o) => sameItem(o, it)))] }));
+  if (DEMO) return;
+  report(fb.setDoc(fb.doc(fb.db, "games", id), { ...data, log: fb.arrayUnion(...items) }, { merge: true }));
+}
+
+// 記録を1つ消す（「1球戻す」で前の打席を戻すとき・削除するとき）
+// ほかの端末がその記録を直していた場合は、消さずに残ります。
+export function removeLogItem(id, item, extra = {}) {
+  const data = clean(stamp(extra));
+  localGame(id, (x) => ({ ...x, ...data, log: (x.log || []).filter((o) => !sameItem(o, item)) }));
+  if (DEMO) return;
+  report(fb.setDoc(fb.doc(fb.db, "games", id), { ...data, log: fb.arrayRemove(item) }, { merge: true }));
+}
+
+// 記録を1つ直す。サーバーの最新の内容を読んでから、その1つだけを書き換えます。
+// 順番を変えずに直すため、電波が必要です（圏外のときは "offline" で失敗します）。
+export async function replaceLogItem(id, itemId, patch) {
+  const apply = (log) => {
+    const j = (log || []).findIndex((o) => o.id === itemId);
+    if (j < 0) return null;
+    const l2 = [...log]; l2[j] = clean({ ...l2[j], ...patch });
+    return l2;
+  };
+  if (DEMO) { localGame(id, (x) => ({ ...x, log: apply(x.log) || x.log })); return; }
+  if (!state.online) { const e = new Error("圏外です"); e.code = "offline"; throw e; }
+  const ref = fb.doc(fb.db, "games", id);
+  await fb.runTransaction(fb.db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw Object.assign(new Error("試合が見つかりません"), { code: "not-found" });
+    const l2 = apply(snap.data().log);
+    if (!l2) throw Object.assign(new Error("ほかの端末でこの記録が消されています"), { code: "not-found" });
+    tx.set(ref, clean(stamp({ log: l2 })), { merge: true });
+  });
+}
+
+// 試合情報（日付・相手・スタメンなど）だけを保存。記録（log）には触りません。
+const INFO_FIELDS = ["date", "no", "opponent", "venue", "tournamentId", "first", "lineup", "positions", "bench", "pitcher", "oppPitcher"];
+export function saveGameInfo(id, g) {
+  const info = Object.fromEntries(INFO_FIELDS.filter((k) => k in g).map((k) => [k, g[k]]));
+  patchGame(id, info);
+}
+
+// 試合の一部だけ更新（状態・入力途中のカウントなど）。log は送らないでください。
 export function patchGame(id, patch) {
+  if ("log" in patch) console.warn("patchGame で log を書くと上書きになります。appendLog などを使ってください。");
   const data = clean(stamp(patch));
   if (DEMO) return demoPatch("games", id, data);
   // 画面にはすぐ反映（キーを速く連打しても前の入力を取りこぼさないように）
@@ -233,11 +301,30 @@ export function exportAll() {
     settings: state.settings, players: state.players, games: state.games, members: state.members,
   };
 }
-export async function importAll(data) {
+// 復元は「消えてしまったものを戻す」だけにします。
+// 今ある選手・試合は、バックアップの方が新しい場合を除いて上書きしません。
+export function importPlan(data) {
   if (!data || data.app !== "baseball-stats") throw new Error("このアプリのバックアップファイルではありません");
-  saveSettings(data.settings || {});
-  for (const p of data.players || []) savePlayer(p);
-  for (const g of data.games || []) saveGame(g);
+  const newer = (b, cur) => (b.updatedAt || "") > (cur.updatedAt || "");
+  const plan = { players: [], games: [], keepPlayers: 0, keepGames: 0, settings: !state.settings.updatedAt && !!data.settings };
+  for (const p of data.players || []) {
+    const cur = state.players.find((x) => x.id === p.id);
+    if (!cur || newer(p, cur)) plan.players.push(p); else plan.keepPlayers++;
+  }
+  for (const g of data.games || []) {
+    const cur = state.games.find((x) => x.id === g.id);
+    // 今ある試合の記録の方が多いときは、絶対に上書きしない
+    const safe = !cur || (newer(g, cur) && (g.log || []).length >= (cur.log || []).length);
+    if (safe) plan.games.push(g); else plan.keepGames++;
+  }
+  return plan;
+}
+export async function importAll(data) {
+  const plan = importPlan(data);
+  if (plan.settings) saveSettings(data.settings);
+  for (const p of plan.players) savePlayer(p);
+  for (const g of plan.games) saveGame(g);
+  return plan;
 }
 
 // ---------------------------------------------------------------------

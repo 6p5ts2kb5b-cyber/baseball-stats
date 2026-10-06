@@ -125,8 +125,13 @@ export function viewSettings() {
       const file = e.target.files[0]; if (!file) return;
       try {
         const data = JSON.parse(await file.text());
-        if (!confirm(`バックアップ（${data.exportedAt?.slice(0, 10) || "日付不明"}、試合${data.games?.length || 0}件・選手${data.players?.length || 0}人）から復元しますか？\n同じ試合・選手はバックアップの内容で上書きされます。`)) return;
-        await store.importAll(data); toast("復元しました");
+        const plan = store.importPlan(data);
+        if (!plan.games.length && !plan.players.length && !plan.settings) {
+          alert(`バックアップ（${data.exportedAt?.slice(0, 10) || "日付不明"}）の内容は、すべて今のアプリに入っています。戻すものはありません。`);
+          return;
+        }
+        if (!confirm(`バックアップ（${data.exportedAt?.slice(0, 10) || "日付不明"}）から、なくなっている分だけを戻します。\n\n・戻す：試合${plan.games.length}件、選手${plan.players.length}人\n・今のまま残す：試合${plan.keepGames}件、選手${plan.keepPlayers}人\n\n今入っている記録は上書きしません。戻しますか？`)) return;
+        await store.importAll(data); toast(`試合${plan.games.length}件・選手${plan.players.length}人を戻しました`);
       } catch (err) { alert("復元できませんでした：" + err.message); }
       e.target.value = "";
     });

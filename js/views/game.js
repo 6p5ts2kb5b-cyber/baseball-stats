@@ -213,14 +213,21 @@ export function editItemSheet(g, itemId) {
   const idx = log.findIndex((i) => i.id === itemId);
   if (idx < 0) return toast("記録が見つかりません");
   const it = { ...log[idx] };
-  const save = (patch) => {
+  // 消す：その1つだけを消す（ほかの記録には触らない）
+  // 直す：最新の記録を読んでから、その1つだけを書き換える（電波が必要）
+  const save = async (patch) => {
     const gg = state.games.find((x) => x.id === g.id);
-    const l2 = [...(gg.log || [])];
-    const j = l2.findIndex((i) => i.id === itemId);
-    if (j < 0) return;
-    if (patch === null) l2.splice(j, 1); else l2[j] = { ...l2[j], ...patch };
-    store.patchGame(g.id, { log: l2 });
-    closeSheet(); toast(patch === null ? "削除しました" : "直しました");
+    const cur = (gg.log || []).find((i) => i.id === itemId);
+    if (!cur) { closeSheet(); return toast("この記録は、ほかの端末ですでに消されています"); }
+    if (patch === null) { store.removeLogItem(g.id, cur); closeSheet(); return toast("削除しました"); }
+    try {
+      await store.replaceLogItem(g.id, itemId, patch);
+      closeSheet(); toast("直しました");
+    } catch (e) {
+      alert(e.code === "offline"
+        ? "圏外のため、今は直せません。記録はそのまま残っています。電波のある所でもう一度「直す」を押してください。"
+        : "直せませんでした：" + (e.message || e));
+    }
   };
   if (it.k === "ev") {
     sheet(`<h2>記録を直す</h2><p>${itemText(it, g)}</p>
