@@ -402,13 +402,15 @@ export function fieldSvg(lineup, positions) {
     const [x, y] = FIELD_XY[pos];
     const no = p ? numberOf(p) : "";
     const name = p ? p.name : "―";
-    const w = Math.max(96, name.length * 17 + 34);
+    // 背番号は名前の右に小さく（丸の外に浮かせると読みにくいため）
+    const noW = no !== "" ? String(no).length * 8 + 14 : 0;
+    const w = Math.max(96, name.length * 17 + 44 + noW);
     return `<g transform="translate(${x} ${y})">
       <rect x="${-w / 2}" y="-19" width="${w}" height="38" rx="19" fill="#ffffff" stroke="#183326" stroke-width="2"/>
       <circle cx="${-w / 2 + 19}" cy="0" r="15" fill="#183326"/>
       <text x="${-w / 2 + 19}" y="5" text-anchor="middle" font-size="13" font-weight="800" fill="#ffd966">${pos}</text>
       <text x="${-w / 2 + 40}" y="6" font-size="16" font-weight="700" fill="#16241c">${esc(name)}</text>
-      ${no !== "" ? `<text x="${w / 2 - 10}" y="-24" text-anchor="end" font-size="11" font-weight="700" fill="#5b6a61">#${esc(no)}</text>` : ""}
+      ${no !== "" ? `<text x="${w / 2 - 12}" y="5" text-anchor="end" font-size="12" font-weight="700" fill="#5b6a61">#${esc(no)}</text>` : ""}
     </g>`;
   };
   return `<svg class="field" viewBox="0 0 500 450" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="守備配置図" font-family="Hiragino Sans, Noto Sans JP, Noto Sans CJK JP, Meiryo, sans-serif">

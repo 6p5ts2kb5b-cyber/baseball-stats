@@ -208,7 +208,7 @@ export function gameCard(g) {
 // ---- 新しい版のお知らせ ----
 // アプリを更新したら version.json の数字を変えます。開いたままの端末にも
 // 「新しい版があります」と出して、読み込み直してもらいます（古い版のまま入力し続けないように）。
-const APP_VERSION = "2026.10.06-1";
+const APP_VERSION = "2026.10.06-2";
 async function checkVersion() {
   if (store.isDemo || location.protocol !== "https:") return;
   try {
