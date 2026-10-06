@@ -363,3 +363,8 @@ table.pt.grid td.pg .rbi { font-size: 11px; color: var(--accent); font-weight: 7
 .updbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); z-index: 80; display: flex; gap: 12px; align-items: center;
   background: var(--board); color: var(--board-ink); padding: 10px 12px 10px 16px; border-radius: 14px; box-shadow: 0 6px 24px rgb(0 0 0 / .25); max-width: calc(100% - 24px); font-weight: 600; }
 .updbar .btn { background: #ffd966; color: #1b1400; border-color: #ffd966; }
+
+/* 小さな見た目の修正 */
+.topbar .btn { white-space: nowrap; flex: none; }
+.topbar .brand { min-width: 0; }
+.btn.primary .hand { background: rgb(255 255 255 / .22); border-color: transparent; color: inherit; }
