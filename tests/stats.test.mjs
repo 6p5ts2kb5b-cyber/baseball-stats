@@ -249,4 +249,45 @@ t("守備（処理・失策・簡易守備率・盗塁阻止率）", () => {
   assert.deepEqual([F.team.outs, F.team.e], [4, 2]);
   assert.equal(F.players.s.games["6"], 1);
 });
+t("相手分析：自チームとの試合を相手チームの目線に直す", () => {
+  const g = { id: "g", first: true, opponent: "X中", oppLineup: ["o1"], oppPitcherId: "op", extras: { me: { sb: 3 } }, log: [
+    { k: "pa", side: "off", inn: 1, half: "T", batter: "me", oppPitcherId: "op", bh: "R", p: "SSK", res: "K" },
+    { k: "pa", side: "off", inn: 1, half: "T", batter: "me", oppPitcherId: "op", bh: "L", p: "X", res: "1B", runs: 1 },
+    { k: "ev", side: "off", inn: 1, half: "T", type: "wp" },
+    { k: "pa", side: "def", inn: 1, half: "B", pitcher: "mp", oppBatter: "o1", slot: 1, bh: "L", p: "BX", res: "2B", runs: 1, rbi: 1 },
+    { k: "pa", side: "def", inn: 1, half: "B", pitcher: "mp", slot: 2, bh: "R", p: "X", res: "GO" },
+    { k: "ev", side: "def", inn: 1, half: "B", type: "sb" },
+  ]};
+  assert.equal(S.teamView(g, "Y中"), null);
+  const v = S.teamViews([g], "X中");
+  const b = S.batting(v, "o1");
+  assert.deepEqual([b.pa, b.h, b.s2, b.rbi], [1, 1, 1, 1]);
+  const T = S.batting(v, null);
+  assert.deepEqual([T.pa, T.h, T.sb], [2, 1, 1]); // 自チームの extras は入らない
+  const P = S.pitching(v, "op");
+  assert.deepEqual([P.bf, P.k, P.h, P.runs, P.wp, P.g], [2, 1, 1, 1, 1, 1]);
+  assert.equal(S.teamRunsByInning(v).total, 1);
+  // 自チームの成績は変わらない
+  assert.equal(S.batting([g], "me").pa, 2);
+});
+
+t("相手分析：相手どうしの試合（先攻・後攻どちらの目線でも）", () => {
+  const g = { id: "s", scout: true, first: true, top: "A中", bottom: "B中", lineup: ["a1"], pitcher: "ap", oppLineup: ["b1"], oppPitcherId: "bp", log: [
+    { k: "pa", side: "off", inn: 1, half: "T", batter: "a1", oppPitcherId: "bp", p: "BBBB", res: "BB" },
+    { k: "pa", side: "def", inn: 1, half: "B", oppBatter: "b1", pitcher: "ap", p: "X", res: "HR", runs: 1, rbi: 1, er: 1 },
+  ]};
+  const A = S.teamViews([g], "A中"), B = S.teamViews([g], "B中");
+  assert.equal(S.batting(A, "a1").bb, 1);
+  assert.equal(S.pitching(A, "ap").h, 1);
+  assert.equal(S.batting(B, "b1").hr, 1);
+  assert.equal(S.pitching(B, "bp").bb, 1);
+  assert.equal(S.teamRunsByInning(B).total, 1);
+  assert.equal(S.teamRunsByInning(A).total, 0);
+});
+import { readFileSync } from "node:fs";
+t("アプリの版の番号が version.json と同じ（違うと更新のお知らせが消えない）", () => {
+  const app = readFileSync(new URL("../js/app.js", import.meta.url), "utf8").match(/APP_VERSION = "([^"]+)"/)[1];
+  const v = JSON.parse(readFileSync(new URL("../version.json", import.meta.url), "utf8")).version;
+  assert.equal(app, v);
+});
 console.log(`\nすべて成功（${n}件）`);

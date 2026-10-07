@@ -45,7 +45,7 @@ export function pname(id, withNo = false) {
   return withNo && no !== "" ? `${esc(p.name)} <span class="muted small">#${esc(no)}</span>` : esc(p.name);
 }
 export function activePlayers() {
-  return state.players.filter((p) => p.active !== false && !p.deleted)
+  return state.players.filter((p) => p.active !== false && !p.deleted && !p.opp)
     .sort((a, b) => (Number(numberOf(a)) || 999) - (Number(numberOf(b)) || 999) || a.name.localeCompare(b.name, "ja"));
 }
 export function gradeText(p, season = thisSeason()) { return gradeOf(p?.entryYear, season); }
@@ -57,7 +57,23 @@ export function tournaments(all = false) {
 export function tname(id) { return state.settings.tournaments.find((t) => t.id === id)?.name || "（大会なし）"; }
 
 // ---- 試合 ----
-export function liveGames() { return state.games.filter((g) => !g.deleted); }
+// 自チームの試合だけ（相手どうしの偵察試合は入れない）
+export function liveGames() { return state.games.filter((g) => !g.deleted && !g.scout); }
+// ---- 相手分析 ----
+export function scoutGames() { return state.games.filter((g) => !g.deleted && g.scout); }
+// 相手チームの選手（背番号順）
+export function oppPlayers(team) {
+  return state.players.filter((p) => p.opp && p.opp === team && !p.deleted)
+    .sort((a, b) => (Number(numberOf(a)) || 999) - (Number(numberOf(b)) || 999) || a.name.localeCompare(b.name, "ja"));
+}
+// 相手チームの一覧（試合した相手・偵察した試合のチーム・選手を登録したチーム）
+export function oppTeams() {
+  const set = new Set();
+  for (const g of liveGames()) if (g.opponent) set.add(g.opponent);
+  for (const g of scoutGames()) { if (g.top) set.add(g.top); if (g.bottom) set.add(g.bottom); }
+  for (const p of state.players) if (p.opp && !p.deleted) set.add(p.opp);
+  return [...set].sort((a, b) => a.localeCompare(b, "ja"));
+}
 export function gameLabel(g) { return `第${g.no ?? "?"}試合 ${g.date?.slice(5).replace("-", "/") ?? ""} vs ${esc(g.opponent || "")}`; }
 
 // ---- お知らせ ----

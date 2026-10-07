@@ -12,21 +12,29 @@ import { viewGame } from "./views/game.js";
 import { viewBatting, viewPitching, viewPlayer } from "./views/statsview.js";
 import { viewSettings } from "./views/settings.js";
 import { viewAnalysis } from "./views/analysis.js";
+import { viewScout, viewScoutTeam, viewScoutPlayer, viewScoutGame, viewScoutGameEdit } from "./views/scout.js";
 import { viewReport, viewGamePrint, viewRanking, viewMembers } from "./views/print.js";
 
 const app = document.getElementById("app");
 
 // ---- 画面の一覧 ----
 // live: データが変わったら自動で描き直すか（入力フォームは false）
+// 相手どうしの試合（偵察）か
+const isScout = (id) => !!state.games.find((g) => g.id === id)?.scout;
 const routes = [
   { re: /^#?\/?$/, view: viewHome, live: true, nav: "home" },
   { re: /^#\/games$/, view: viewGames, live: true, nav: "games" },
   { re: /^#\/game\/new$/, view: () => viewGameEdit(null), live: false, nav: "games" },
-  { re: /^#\/game\/([\w-]+)\/edit$/, view: (id) => viewGameEdit(id), live: false, nav: "games" },
+  { re: /^#\/game\/([\w-]+)\/edit$/, view: (id) => (isScout(id) ? viewScoutGameEdit(id) : viewGameEdit(id)), live: false, nav: "games" },
   { re: /^#\/game\/([\w-]+)\/input$/, view: viewInput, live: true, nav: "games", bare: true },
   { re: /^#\/game\/([\w-]+)\/print$/, view: viewGamePrint, live: true, nav: "games" },
   { re: /^#\/game\/([\w-]+)\/members$/, view: viewMembers, live: true, nav: "games" },
-  { re: /^#\/game\/([\w-]+)$/, view: viewGame, live: true, nav: "games" },
+  { re: /^#\/game\/([\w-]+)$/, view: (id) => (isScout(id) ? viewScoutGame(id) : viewGame(id)), live: true, nav: "games" },
+  { re: /^#\/scout$/, view: viewScout, live: true, nav: "scout" },
+  { re: /^#\/scout\/team\/([^/?]+)(?:\/(\w+))?$/, view: viewScoutTeam, live: true, nav: "scout" },
+  { re: /^#\/scout\/player\/([\w-]+)$/, view: viewScoutPlayer, live: true, nav: "scout" },
+  { re: /^#\/scout\/game\/new(?:\?.*)?$/, view: () => viewScoutGameEdit(null), live: false, nav: "scout" },
+  { re: /^#\/scout\/game\/([\w-]+)\/edit$/, view: (id) => viewScoutGameEdit(id), live: false, nav: "scout" },
   { re: /^#\/report$/, view: viewReport, live: true, nav: "report" },
   { re: /^#\/ranking$/, view: viewRanking, live: true, nav: "ranking" },
   { re: /^#\/analysis(?:\/([\w/-]+))?$/, view: viewAnalysis, live: true, nav: "analysis" },
@@ -58,7 +66,7 @@ function render(force) {
   if (!changed && !force && !r.live) { renderTop(r); return; }
   lastHash = hash;
   const m = hash.match(r.re);
-  const out = r.view(m?.[1]);
+  const out = r.view(...(m ? m.slice(1) : []));
   shell(out.html, { nav: r.nav, bare: r.bare, after: out.after, keepScroll: !changed });
 }
 
@@ -92,7 +100,7 @@ function topbar() {
     ${state.user ? `<button class="btn sm" id="logout" style="background:transparent;color:inherit;border-color:rgb(255 255 255 / .3)">ログアウト</button>` : ""}</header>`;
 }
 function navbar(cur) {
-  const items = [["home", "#/", "ホーム"], ["games", "#/games", "試合"], ["batting", "#/batting", "打者成績"], ["pitching", "#/pitching", "投手成績"], ["ranking", "#/ranking", "ランキング"], ["analysis", "#/analysis", "分析"], ["report", "#/report", "印刷"], ["settings", "#/settings", "設定"]];
+  const items = [["home", "#/", "ホーム"], ["games", "#/games", "試合"], ["batting", "#/batting", "打者成績"], ["pitching", "#/pitching", "投手成績"], ["ranking", "#/ranking", "ランキング"], ["analysis", "#/analysis", "分析"], ["scout", "#/scout", "相手分析"], ["report", "#/report", "印刷"], ["settings", "#/settings", "設定"]];
   return `<nav class="nav noprint">${items.map(([k, h, l]) => `<a href="${h}" class="${cur === k ? "on" : ""}">${l}</a>`).join("")}</nav>`;
 }
 
@@ -210,7 +218,7 @@ export function gameCard(g) {
 // ---- 新しい版のお知らせ ----
 // アプリを更新したら version.json の数字を変えます。開いたままの端末にも
 // 「新しい版があります」と出して、読み込み直してもらいます（古い版のまま入力し続けないように）。
-const APP_VERSION = "2026.10.06-2";
+const APP_VERSION = "2026.10.07-2"; // version.json と同じにする
 async function checkVersion() {
   if (store.isDemo || location.protocol !== "https:") return;
   try {

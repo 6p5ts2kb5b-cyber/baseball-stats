@@ -4,7 +4,7 @@
 // =====================================================================
 import * as store from "../store.js";
 import { state, newId } from "../store.js";
-import { esc, $, $$, toast, sheet, closeSheet, player, activePlayers, numberOf, HAND } from "../ui.js";
+import { esc, $, $$, toast, sheet, closeSheet, player, activePlayers, numberOf, HAND, oppPlayers, thisSeason } from "../ui.js";
 import { gameState, liveCount, autoResult, advance, R, RESULTS, DIRS, DIRNAME, fieldMap } from "../stats.js";
 import { itemText } from "./game.js";
 
@@ -18,30 +18,42 @@ const EV = {
   e: "失策", wp: "暴投", pb: "捕逸",
 };
 
+// 打者の打席の左右（両打ちは投手の逆）
+const handOf = (p, ph) => (p?.bats === "S" ? (ph === "R" ? "L" : "R") : p?.bats === "L" ? "L" : "R");
+// 偵察試合（相手どうし）：先攻＝off（lineup・pitcher）、後攻＝def（oppLineup・oppPitcherId）
+const teamOf = (g, side) => (g.scout ? (side === "off" ? g.top : g.bottom) : side === "off" ? null : g.opponent);
+const fieldTeamOf = (g, side) => (g.scout ? (side === "off" ? g.bottom : g.top) : side === "off" ? g.opponent : null);
+const pno = (p) => (numberOf(p) !== "" ? "#" + esc(numberOf(p)) + " " : "");
+
 function ctx(g) {
   const st = gameState(g);
   const side = st.side;
+  const sc = !!g.scout;
   const cur = g.cur && g.cur.inn === st.inn && g.cur.half === st.half ? g.cur : null;
   const p = cur?.p || "";
   const runners = cur?.runners || st.runners;
   const slot = cur?.slot || st.nextSlot[side];
-  let batter = null, bh = "R", pitcher = null, ph = "R", bName, pName;
+  let batter = null, oppBatter = null, bh = "R", pitcher = null, oppPitcherId = null, ph = "R", bName, pName;
   if (side === "off") {
     batter = (g.lineup || [])[slot - 1] || null;
     const bp = player(batter);
-    ph = g.oppPitcher?.hand === "L" ? "L" : "R";
-    bh = bp?.bats === "S" ? (ph === "R" ? "L" : "R") : bp?.bats === "L" ? "L" : "R";
+    const op = player(g.oppPitcherId);
+    oppPitcherId = op ? op.id : null;
+    ph = op ? (op.throws === "L" ? "L" : "R") : g.oppPitcher?.hand === "L" ? "L" : "R";
+    bh = handOf(bp, ph);
     bName = bp ? esc(bp.name) : "（打者を選択）";
-    pName = "相手 " + esc(g.oppPitcher?.name || "投手");
+    pName = sc ? (op ? esc(op.name) : "（投手を選択）") : "相手 " + esc(op?.name || g.oppPitcher?.name || "投手");
   } else {
     pitcher = g.pitcher || null;
     const pp = player(pitcher);
     ph = pp?.throws === "L" ? "L" : "R";
-    bh = g.oppHands?.[slot] === "L" ? "L" : "R";
-    bName = `相手 ${slot}番`;
+    oppBatter = (g.oppLineup || [])[slot - 1] || null;
+    const ob = player(oppBatter);
+    bh = ob ? handOf(ob, ph) : g.oppHands?.[slot] === "L" ? "L" : "R";
+    bName = ob ? (sc ? "" : "相手 ") + esc(ob.name) : sc ? "（打者を選択）" : `相手 ${slot}番`;
     pName = pp ? esc(pp.name) : "（投手を選択）";
   }
-  return { st, side, cur, p, runners, slot, batter, bh, pitcher, ph, bName, pName };
+  return { st, side, sc, cur, p, runners, slot, batter, oppBatter, bh, pitcher, oppPitcherId, ph, bName, pName };
 }
 
 export function viewInput(id) {
@@ -55,17 +67,17 @@ export function viewInput(id) {
   const recent = (g.log || []).slice(-5).reverse();
   const final = g.status === "final";
   const html = `<div class="inp">
-    <div class="row"><a href="#/game/${g.id}" class="btn sm">‹ 試合の記録</a><span class="grow muted small" style="text-align:right">第${g.no}試合 vs ${esc(g.opponent)}</span></div>
+    <div class="row"><a href="#/game/${g.id}" class="btn sm">‹ 試合の記録</a><span class="grow muted small" style="text-align:right">${g.scout ? `相手分析　${esc(g.top)} 対 ${esc(g.bottom)}` : `第${g.no}試合 vs ${esc(g.opponent)}`}</span></div>
     ${final ? `<div class="alert">この試合は「終了」になっています。続きを入力すると記録は追加されます。</div>` : ""}
     <div class="sit">
       <div>
-        <div class="inning">${st.inn}回${st.half === "T" ? "表" : "裏"} <span style="font-size:14px;font-weight:700;opacity:.8">${c.side === "off" ? "攻撃" : "守備"}</span></div>
+        <div class="inning">${st.inn}回${st.half === "T" ? "表" : "裏"} <span style="font-size:14px;font-weight:700;opacity:.8">${c.sc ? esc(teamOf(g, c.side)) + "の攻撃" : c.side === "off" ? "攻撃" : "守備"}</span></div>
         <div class="lamps" aria-label="カウント">
           <div>B ${lamps(cnt.b, 3, "b")}</div><div>S ${lamps(cnt.s, 2, "s")}</div><div>O ${lamps(st.outs, 2, "o")}</div>
         </div>
       </div>
       <div style="display:grid;gap:6px;justify-items:end">
-        <div class="sc">${st.score.us}<small>自 - 相</small>${st.score.them}</div>
+        <div class="sc">${st.score.us}<small>${c.sc ? `${esc(g.top)} - ${esc(g.bottom)}` : "自 - 相"}</small>${st.score.them}</div>
         <div class="diamond" aria-label="走者（タップで切り替え）">
           <button class="base b2 ${c.runners[1] ? "on" : ""}" data-base="1" aria-label="2塁"></button>
           <button class="base b3 ${c.runners[2] ? "on" : ""}" data-base="2" aria-label="3塁"></button>
@@ -140,7 +152,8 @@ function commit(g, p, res, o) {
   const it = {
     k: "pa", id: newId(), inn: c.st.inn, half: c.st.half, side: c.side, slot: c.slot,
     batter: c.batter, bh: c.bh, pitcher: c.pitcher, ph: c.ph,
-    oppPitcher: c.side === "off" ? (g.oppPitcher?.name || "") : null,
+    oppPitcher: c.side === "off" && !c.sc ? (g.oppPitcher?.name || player(c.oppPitcherId)?.name || "") : null,
+    oppBatter: c.oppBatter || undefined, oppPitcherId: c.oppPitcherId || undefined,
     outsBefore: c.st.outs, runners: c.runners, p, res,
     runs, rbi: o.rbi ?? adv.rbi, outs: o.outs ?? R[res].outs, ra: adv.ra,
     ts: new Date().toISOString(),
@@ -249,7 +262,7 @@ function catcherFirst(ids) {
 function moreSheet(g) {
   const c = ctx(g);
   const off = c.side === "off";
-  const lineup = (g.lineup || []).filter(Boolean);
+  const lineup = ((g.scout && !off ? g.oppLineup : g.lineup) || []).filter(Boolean);
   const runnerPick = (type) => `<div class="plist">${lineup.map((pid) => `<button class="btn" data-ev="${type}" data-runner="${pid}">${esc(player(pid)?.name || "?")}</button>`).join("")}<button class="btn" data-ev="${type}">（選ばずに記録）</button></div>`;
   sheet(`<h2>走者・その他</h2>
     <div class="stack">
@@ -299,37 +312,70 @@ function moreSheet(g) {
   });
 }
 
+// ---- 相手チームの選手をその場で登録する欄 ----
+function addOppForm(team, kind) {
+  return `<details class="addopp"><summary class="btn sm">＋ ${esc(team)}の選手を登録</summary>
+    <div class="row" style="margin-top:8px;align-items:end">
+      <label class="f" style="width:80px">背番号<input type="text" inputmode="numeric" data-ao="no"></label>
+      <label class="f grow">名前<input type="text" data-ao="name" placeholder="例：山田（名字だけでも可）"></label>
+      <label class="f" style="width:90px">${kind === "p" ? "投げ方" : "打ち方"}<select data-ao="hand">${kind === "p" ? `<option value="R">右投</option><option value="L">左投</option>` : `<option value="R">右打</option><option value="L">左打</option><option value="S">両打</option>`}</select></label>
+      <button type="button" class="btn primary" data-ao="ok">登録して選ぶ</button>
+    </div></details>`;
+}
+function bindAddOpp(el, team, kind, onPick) {
+  const ok = el.querySelector('[data-ao="ok"]'); if (!ok) return;
+  ok.onclick = () => {
+    const name = el.querySelector('[data-ao="name"]').value.trim();
+    const no = el.querySelector('[data-ao="no"]').value.trim();
+    if (!name && !no) return toast("名前か背番号を入れてください");
+    const hand = el.querySelector('[data-ao="hand"]').value;
+    const pdata = { name: name || `#${no}`, opp: team, numbers: no ? { [thisSeason()]: no } : {}, active: true, pos: kind === "p" ? "投" : "" };
+    if (kind === "p") pdata.throws = hand; else pdata.bats = hand;
+    const id = store.savePlayer(pdata);
+    onPick(id);
+  };
+}
+const oppBtn = (p, on, kind) => `<button class="btn ${on ? "primary" : ""}" data-pid="${p.id}">${pno(p)}${esc(p.name)} <span class="hand">${kind === "p" ? (HAND[p.throws] || "右") + "投" : (HAND[p.bats] || "右") + "打"}</span></button>`;
+
 // ---- 打順・選手交代 ----
 function orderSheet(g) {
   const c = ctx(g);
   const off = c.side === "off";
-  const pls = activePlayers();
-  sheet(`<h2>${off ? "打順・選手交代" : "相手の打者"}</h2>
+  const team = teamOf(g, c.side); // 相手（または偵察チーム）の打者なら、そのチーム名
+  const pls = team ? oppPlayers(team) : activePlayers();
+  const cur = off ? c.batter : c.oppBatter;
+  const lineKey = off ? "lineup" : "oppLineup";
+  sheet(`<h2>${team ? esc(team) + "の打者" : "打順・選手交代"}</h2>
     <div class="stack">
       <div><div class="muted small" style="font-weight:700;margin-bottom:4px">打順（ずれていたら直せます）</div>
         <div class="nums">${Array.from({ length: 9 }, (_, i) => `<button data-slot="${i + 1}" class="${c.slot === i + 1 ? "on" : ""}">${i + 1}</button>`).join("")}</div></div>
-      ${off ? `<div><div class="muted small" style="font-weight:700;margin-bottom:4px">${c.slot}番の打者（代打・交代はここで選ぶ）</div>
-        <div class="plist">${pls.map((p) => `<button class="btn ${c.batter === p.id ? "primary" : ""}" data-pid="${p.id}">${numberOf(p) !== "" ? "#" + esc(numberOf(p)) + " " : ""}${esc(p.name)} <span class="hand">${HAND[p.bats] || "右"}打</span></button>`).join("")}</div></div>`
-      : `<div><div class="muted small" style="font-weight:700;margin-bottom:4px">相手${c.slot}番の打者は</div>
-        <div class="seg"><button data-hand="R" class="${c.bh === "R" ? "on" : ""}">右打ち</button><button data-hand="L" class="${c.bh === "L" ? "on" : ""}">左打ち</button></div>
-        <p class="muted small">一度選ぶと、同じ打順では次から自動で入ります。</p></div>`}
+      <div><div class="muted small" style="font-weight:700;margin-bottom:4px">${c.slot}番の打者${team ? "" : "（代打・交代はここで選ぶ）"}</div>
+        <div class="plist">${pls.map((p) => oppBtn(p, cur === p.id, "b")).join("")}${team && !pls.length ? `<span class="muted small">${esc(team)}の選手はまだ登録されていません。</span>` : ""}</div>
+        ${team ? addOppForm(team, "b") : ""}</div>
+      ${!off && !g.scout ? `<div><div class="muted small" style="font-weight:700;margin-bottom:4px">名前が分からないときは、打ち方だけ（相手${c.slot}番）</div>
+        <div class="seg"><button data-hand="R" class="${!cur && c.bh === "R" ? "on" : ""}">右打ち</button><button data-hand="L" class="${!cur && c.bh === "L" ? "on" : ""}">左打ち</button></div>
+        <p class="muted small">一度選ぶと、同じ打順では次から自動で入ります。</p></div>` : ""}
       <button class="btn block" id="cx">閉じる</button>
     </div>`, (el) => {
     const G = () => state.games.find((x) => x.id === g.id);
+    const pick = (pid) => {
+      const gg = G(), cc = ctx(gg);
+      const line = [...(gg[lineKey] || [])]; while (line.length < 9) line.push(null);
+      line[cc.slot - 1] = pid;
+      store.patchGame(gg.id, { [lineKey]: line }); closeSheet();
+    };
     $$("[data-slot]", el).forEach((b) => b.onclick = () => {
       const gg = G(), cc = ctx(gg);
       setCur(gg, cc, { slot: +b.dataset.slot }); closeSheet();
     });
-    $$("[data-pid]", el).forEach((b) => b.onclick = () => {
-      const gg = G(), cc = ctx(gg);
-      const lineup = [...(gg.lineup || [])]; while (lineup.length < 9) lineup.push(null);
-      lineup[cc.slot - 1] = b.dataset.pid;
-      store.patchGame(gg.id, { lineup }); closeSheet();
-    });
+    $$("[data-pid]", el).forEach((b) => b.onclick = () => pick(b.dataset.pid));
     $$("[data-hand]", el).forEach((b) => b.onclick = () => {
       const gg = G(), cc = ctx(gg);
-      store.patchGame(gg.id, { oppHands: { ...(gg.oppHands || {}), [cc.slot]: b.dataset.hand } }); closeSheet();
+      const line = [...(gg.oppLineup || [])]; while (line.length < 9) line.push(null);
+      line[cc.slot - 1] = null;
+      store.patchGame(gg.id, { oppHands: { ...(gg.oppHands || {}), [cc.slot]: b.dataset.hand }, oppLineup: line }); closeSheet();
     });
+    if (team) bindAddOpp(el, team, "b", pick);
     $("#cx", el).onclick = closeSheet;
   });
 }
@@ -337,24 +383,42 @@ function orderSheet(g) {
 // ---- 投手交代 ----
 function pitcherSheet(g) {
   const c = ctx(g);
-  if (c.side === "def") {
+  const team = fieldTeamOf(g, c.side); // 投げているのが相手（偵察チーム）なら、そのチーム名
+  if (!team) {
     const pls = activePlayers();
-    sheet(`<h2>自チームの投手</h2><div class="plist">${pls.map((p) => `<button class="btn ${c.pitcher === p.id ? "primary" : ""}" data-pid="${p.id}">${numberOf(p) !== "" ? "#" + esc(numberOf(p)) + " " : ""}${esc(p.name)} <span class="hand">${HAND[p.throws] || "右"}投</span></button>`).join("")}</div>
+    sheet(`<h2>自チームの投手</h2><div class="plist">${pls.map((p) => oppBtn(p, c.pitcher === p.id, "p")).join("")}</div>
       <button class="btn block" id="cx" style="margin-top:10px">閉じる</button>`, (el) => {
       $$("[data-pid]", el).forEach((b) => b.onclick = () => { store.patchGame(g.id, { pitcher: b.dataset.pid }); closeSheet(); toast("投手を交代しました"); });
       $("#cx", el).onclick = closeSheet;
     });
-  } else {
-    let hand = g.oppPitcher?.hand === "L" ? "L" : "R";
-    sheet(`<h2>相手の投手</h2><div class="stack">
-      <label class="f">名前や背番号<input type="text" id="on" value="${esc(g.oppPitcher?.name || "")}"></label>
-      <div class="seg" id="oh"><button data-v="R" class="${hand === "R" ? "on" : ""}">右投げ</button><button data-v="L" class="${hand === "L" ? "on" : ""}">左投げ</button></div>
-      <div class="row"><button class="btn primary grow" id="ok">保存（投手交代）</button><button class="btn" id="cx">閉じる</button></div></div>`, (el) => {
-      $$("#oh button", el).forEach((b) => b.onclick = () => { hand = b.dataset.v; $$("#oh button", el).forEach((x) => x.classList.toggle("on", x === b)); });
-      $("#ok", el).onclick = () => { store.patchGame(g.id, { oppPitcher: { name: $("#on", el).value.trim(), hand } }); closeSheet(); };
-      $("#cx", el).onclick = closeSheet;
-    });
+    return;
   }
+  const key = c.side === "off" ? "oppPitcherId" : "pitcher"; // 偵察試合の先攻チームの投手は pitcher
+  const curId = c.side === "off" ? c.oppPitcherId : c.pitcher;
+  const pls = oppPlayers(team);
+  let hand = g.oppPitcher?.hand === "L" ? "L" : "R";
+  sheet(`<h2>${esc(team)}の投手</h2><div class="stack">
+    <div class="plist">${pls.map((p) => oppBtn(p, curId === p.id, "p")).join("")}${!pls.length ? `<span class="muted small">${esc(team)}の選手はまだ登録されていません。</span>` : ""}</div>
+    ${addOppForm(team, "p")}
+    ${!g.scout ? `<hr style="border:0;border-top:1px solid var(--line);width:100%">
+      <div class="muted small" style="font-weight:700">登録しないで、名前と投げ方だけ入れる</div>
+      <label class="f">名前や背番号<input type="text" id="on" value="${esc(curId ? "" : g.oppPitcher?.name || "")}"></label>
+      <div class="seg" id="oh"><button data-v="R" class="${hand === "R" ? "on" : ""}">右投げ</button><button data-v="L" class="${hand === "L" ? "on" : ""}">左投げ</button></div>
+      <button class="btn" id="ok">これで保存（投手交代）</button>` : ""}
+    <button class="btn block" id="cx">閉じる</button></div>`, (el) => {
+    const pick = (pid) => {
+      const p = player(pid) || {};
+      const patch = { [key]: pid };
+      if (!g.scout) patch.oppPitcher = { name: p.name || "", hand: p.throws === "L" ? "L" : "R" };
+      store.patchGame(g.id, patch); closeSheet(); toast("投手を交代しました");
+    };
+    $$("[data-pid]", el).forEach((b) => b.onclick = () => pick(b.dataset.pid));
+    bindAddOpp(el, team, "p", pick);
+    $$("#oh button", el).forEach((b) => b.onclick = () => { hand = b.dataset.v; $$("#oh button", el).forEach((x) => x.classList.toggle("on", x === b)); });
+    const ok = $("#ok", el);
+    if (ok) ok.onclick = () => { store.patchGame(g.id, { oppPitcher: { name: $("#on", el).value.trim(), hand }, oppPitcherId: null }); closeSheet(); };
+    $("#cx", el).onclick = closeSheet;
+  });
 }
 export { RESULTS };
 

@@ -463,3 +463,9 @@ table.cmp tr.sub td { background: var(--surface-2); font-weight: 800; font-size:
   .page { padding: 12px; }
 }
 .heat .hh.v { white-space: nowrap; }
+/* 相手分析：選手登録の表 */
+#roster input, #roster select { min-height: 36px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; width: 100%; }
+#roster td { padding-top: 4px; padding-bottom: 4px; }
+#addp { flex-wrap: wrap; }
+#addp .f input, #addp .f select { width: 100%; min-width: 0; }
+.addopp summary { display: inline-flex; margin-top: 8px; }

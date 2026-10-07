@@ -64,5 +64,41 @@ export function demoData() {
     }
     games.push(g);
   }
+  // ---- 相手分析の見本：見本中Aと見本中Eの選手、相手どうしの試合 ----
+  const fam = ["赤井", "青木", "黄瀬", "緑川", "白石", "黒田", "金子", "銀田", "桃井", "茶谷"];
+  const mkTeam = (team, pre, off) => fam.slice(0, 10).map((n, i) => ({ id: pre + (i + 1), name: n + (off ? "（E）" : ""), opp: team, numbers: { 2026: String(i + 1) },
+    throws: i === 0 && off ? "L" : "R", bats: (i + (off ? 1 : 0)) % 3 === 1 ? "L" : "R", pos: ["投", "捕", "一", "二", "三", "遊", "左", "中", "右", "投"][i], active: true }));
+  const A = mkTeam("見本中A", "oa", false), E = mkTeam("見本中E", "oe", true);
+  players.push(...A, ...E);
+  const g1 = games[0];
+  g1.oppLineup = A.slice(0, 9).map((p) => p.id); g1.oppPitcherId = "oa1";
+  for (const it of g1.log) {
+    if (it.k !== "pa") continue;
+    if (it.side === "def") { const b = A[it.slot - 1]; it.oppBatter = b.id; it.bh = b.bats; }
+    else { it.oppPitcherId = it.inn >= 6 ? "oa10" : "oa1"; it.ph = "R"; }
+  }
+  // 相手どうしの試合（見本中A 先攻 vs 見本中E 後攻）
+  const sg = { id: "s1", scout: true, top: "見本中A", bottom: "見本中E", first: true, date: "2026-06-20", tournamentId: "t3", venue: "見本球場", no: 0,
+    lineup: A.slice(0, 9).map((p) => p.id), pitcher: "oa10", oppLineup: E.slice(0, 9).map((p) => p.id), oppPitcherId: "oe1", positions: [], oppHands: {}, status: "final", opponent: "", log: [] };
+  let gd = 0;
+  while (gd++ < 400) {
+    const st = gameState(sg);
+    if (st.inn > 7) break;
+    const side = st.side, slot = st.nextSlot[side];
+    let p = "", res = null;
+    while (!res) {
+      const x = rand();
+      const ch = x < 0.36 ? "B" : x < 0.55 ? "S" : x < 0.66 ? "K" : x < 0.8 ? "F" : x < 0.99 ? "X" : "D";
+      p += ch; res = autoResult(p);
+      if (ch === "X") res = pick(["1B", "1B", "2B", "GO", "GO", "GO", "FO", "FO", "LO", "E", "3B", "HR", "1B"]);
+    }
+    const adv = advance(st.runners, res, st.outs);
+    const it = { k: "pa", id: "s" + gd, inn: st.inn, half: st.half, side, slot, p, res, runners: st.runners, ra: adv.ra, runs: adv.runs, rbi: adv.rbi, outs: R[res].outs };
+    if (p.endsWith("X")) it.dir = ["GO", "E"].includes(res) ? pick(["3", "4", "5", "6"]) : pick(["7", "8", "9", "78", "89"]);
+    if (side === "off") Object.assign(it, { batter: sg.lineup[slot - 1], bh: A[slot - 1].bats, oppPitcherId: "oe1", ph: "L" });
+    else Object.assign(it, { oppBatter: sg.oppLineup[slot - 1], bh: E[slot - 1].bats, pitcher: "oa10", ph: "R", er: adv.runs });
+    sg.log.push(it);
+  }
+  games.push(sg);
   return { players, games };
 }

@@ -254,7 +254,7 @@ export async function replaceLogItem(id, itemId, patch) {
 }
 
 // 試合情報（日付・相手・スタメンなど）だけを保存。記録（log）には触りません。
-const INFO_FIELDS = ["date", "no", "opponent", "venue", "tournamentId", "first", "lineup", "positions", "bench", "pitcher", "oppPitcher"];
+const INFO_FIELDS = ["date", "no", "opponent", "venue", "tournamentId", "first", "lineup", "positions", "bench", "pitcher", "oppPitcher", "oppLineup", "oppPitcherId", "top", "bottom"];
 export function saveGameInfo(id, g) {
   const info = Object.fromEntries(INFO_FIELDS.filter((k) => k in g).map((k) => [k, g[k]]));
   patchGame(id, info);

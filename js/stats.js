@@ -671,3 +671,48 @@ export function fielding(games) {
   fin(team); team.csPct = div(team.cs, team.cs + team.sb);
   return { players: P, positions: POS, team };
 }
+
+// ---- 相手分析：あるチームの目線に並べ替えた試合 ----------------------
+// 自チームの試合（相手＝team）と、相手どうしの試合（scout:true）を、
+// 「teamが攻撃＝off、teamが守備＝def」の形に直します。
+// こうすると batting / pitching / spray など、今の集計をそのまま使えます。
+// 偵察試合の保存の形：先攻(top)＝off（lineup・pitcher）、後攻(bottom)＝def（oppLineup・oppPitcherId）
+export function teamRole(g, team) {
+  if (!team) return null;
+  if (g.scout) return g.top === team ? "top" : g.bottom === team ? "bottom" : null;
+  return g.opponent === team ? "opp" : null;
+}
+export function teamView(g, team) {
+  const role = teamRole(g, team);
+  if (!role) return null;
+  const base = { id: g.id, date: g.date, no: g.no, tournamentId: g.tournamentId, scout: !!g.scout, extras: {}, pitcherAdj: {}, positions: [] };
+  if (role === "top") {
+    return { ...base, first: true, vs: g.bottom, lineup: g.lineup || [], pitcher: g.pitcher || null, pitcherAdj: g.pitcherAdj || {}, log: (g.log || []).map((it) => ({ ...it, fp: undefined })) };
+  }
+  // 後攻チーム・自チームの対戦相手：攻守を入れかえる
+  let lastP = null;
+  const log = (g.log || []).map((it) => {
+    if (it.side === "off") { // このチームが守っている
+      if (it.k === "pa" && it.oppPitcherId) lastP = it.oppPitcherId;
+      const pit = it.oppPitcherId || (it.k === "ev" ? lastP : null) || null;
+      return { ...it, side: "def", pitcher: pit, batter: null, runner: undefined, fielder: undefined, catcher: undefined, fp: undefined, er: undefined };
+    }
+    // このチームが攻撃している
+    return { ...it, side: "off", batter: it.oppBatter || null, pitcher: null, fp: undefined, fielder: undefined, catcher: undefined };
+  });
+  return { ...base, first: g.first === false, vs: role === "opp" ? "自チーム" : g.top, lineup: g.oppLineup || [], pitcher: g.oppPitcherId || null, log };
+}
+// teamが出た試合（自チームとの試合＋相手どうしの試合）をteamの目線で
+export function teamViews(games, team) {
+  return games.map((g) => teamView(g, team)).filter(Boolean);
+}
+// そのチームの攻撃の得点（回ごと）
+export function teamRunsByInning(views) {
+  const by = {}; let total = 0;
+  for (const v of views) for (const it of v.log || []) {
+    if (it.side !== "off") continue;
+    const r = itemRuns(it); if (!r) continue;
+    by[it.inn] = (by[it.inn] || 0) + r; total += r;
+  }
+  return { by, total };
+}

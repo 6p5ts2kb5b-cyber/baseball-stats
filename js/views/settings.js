@@ -11,7 +11,7 @@ export function viewSettings() {
   const S = state.settings;
   const admin = state.role === "admin";
   const canWrite = state.role !== "viewer";
-  const players = [...state.players].filter((p) => !p.deleted).sort((a, b) => (b.active !== false) - (a.active !== false) || (Number(numberOf(a)) || 999) - (Number(numberOf(b)) || 999));
+  const players = [...state.players].filter((p) => !p.deleted && !p.opp).sort((a, b) => (b.active !== false) - (a.active !== false) || (Number(numberOf(a)) || 999) - (Number(numberOf(b)) || 999));
   const trash = state.games.filter((g) => g.deleted);
   const html = `<h1>設定</h1>
     <h2>選手</h2>
@@ -73,7 +73,7 @@ export function viewSettings() {
 
     ${admin ? `<h2>ゴミ箱（削除した試合）</h2>
     <div class="card stack" style="gap:6px">
-      ${trash.map((g) => `<div class="row"><span class="grow">第${g.no}試合 ${esc(g.date)} vs ${esc(g.opponent)}</span><button class="btn sm" data-restore="${g.id}">元に戻す</button><button class="btn sm danger" data-purge="${g.id}">完全に消す</button></div>`).join("") || `<span class="muted">空です</span>`}
+      ${trash.map((g) => `<div class="row"><span class="grow">${g.scout ? `相手分析 ${esc(g.date)} ${esc(g.top)} 対 ${esc(g.bottom)}` : `第${g.no}試合 ${esc(g.date)} vs ${esc(g.opponent)}`}</span><button class="btn sm" data-restore="${g.id}">元に戻す</button><button class="btn sm danger" data-purge="${g.id}">完全に消す</button></div>`).join("") || `<span class="muted">空です</span>`}
     </div>` : ""}
     <p class="muted small" style="margin-top:24px">ログイン中：${esc(state.user?.email)}（${({ admin: "管理者", scorer: "入力者", viewer: "閲覧者" })[state.role]}）</p>`;
 

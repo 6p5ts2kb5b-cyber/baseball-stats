@@ -103,7 +103,7 @@ export function itemText(it, g) {
     const side = misc ? (it.side === "off" ? "（相手）" : "") : it.side === "def" ? "（相手）" : "";
     return `<span class="muted">${where}</span> ${who}${EVTEXT[it.type] || it.type}${side}${it.type === "run" && it.side === "def" && it.er === false ? "（非自責）" : ""}`;
   }
-  const who = it.side === "off" ? esc(player(it.batter)?.name || "?") : `相手${it.slot}番`;
+  const who = it.side === "off" ? esc(player(it.batter)?.name || "?") : it.oppBatter ? esc(player(it.oppBatter)?.name || "?") : `相手${it.slot}番`;
   const r = playText(it) || R[it.res]?.label || it.res;
   const extra = [(it.runs ? `${it.runs}点` : ""), (it.rbi ? `打点${it.rbi}` : "")].filter(Boolean).join("・");
   const fd = it.res === "E" && it.fielder ? `（${esc(player(it.fielder)?.name || "")}の失策）` : "";
