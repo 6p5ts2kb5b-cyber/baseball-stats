@@ -5,7 +5,7 @@
 import * as store from "../store.js";
 import { state, newId } from "../store.js";
 import { esc, $, $$, toast, sheet, closeSheet, player, activePlayers, numberOf, HAND } from "../ui.js";
-import { gameState, liveCount, autoResult, advance, R, RESULTS, DIRS, DIRNAME } from "../stats.js";
+import { gameState, liveCount, autoResult, advance, R, RESULTS, DIRS, DIRNAME, fieldMap } from "../stats.js";
 import { itemText } from "./game.js";
 
 const PBTN = [["B", "ボール"], ["S", "見逃し"], ["K", "空振り"], ["F", "ファウル"], ["X", "打った！"], ["D", "死球"]];
@@ -145,7 +145,7 @@ function commit(g, p, res, o) {
     runs, rbi: o.rbi ?? adv.rbi, outs: o.outs ?? R[res].outs, ra: adv.ra,
     ts: new Date().toISOString(),
   };
-  if (c.side === "def") it.er = o.er ?? runs;
+  if (c.side === "def") { it.er = o.er ?? runs; it.fp = fieldMap(g, c.pitcher); } // そのとき守っていた選手（守備の成績用）
   if (o.fielder) it.fielder = o.fielder;
   if (o.dir) it.dir = o.dir;
   const outsAfter = c.st.outs + it.outs;
@@ -157,7 +157,7 @@ function commit(g, p, res, o) {
 function addEvent(g, type, extra = {}) {
   const c = ctx(g);
   const ev = { k: "ev", id: newId(), inn: c.st.inn, half: c.st.half, side: c.side, type, ts: new Date().toISOString(), ...extra };
-  if (c.side === "def") ev.pitcher = c.pitcher;
+  if (c.side === "def") { ev.pitcher = c.pitcher; ev.fp = fieldMap(g, c.pitcher); }
   const rs = c.runners.slice();
   if (type === "run") rs[2] = 0;
   const outsAfter = c.st.outs + (["cs", "po", "out"].includes(type) ? 1 : 0);

@@ -285,12 +285,34 @@ function finBat(L) {
   L.sbPct = div(L.sb, L.sb + L.cs);
   return L;
 }
-function bucket() { return { pa: 0, ab: 0, h: 0, k: 0 }; }
+// 場面別・カウント別の小さな集計（打率・出塁率・長打率・三振率）
+function bucket() { return { pa: 0, ab: 0, h: 0, k: 0, bb: 0, hbp: 0, sf: 0, tb: 0 }; }
 function addBucket(B, pa, rules) {
   const r = R[pa.res]; if (!r) return;
-  B.pa++; if (rules[r.c]) B.ab++; if (r.hit) B.h++; if (r.c === "K") B.k++;
+  B.pa++; if (rules[r.c]) B.ab++; if (r.hit) { B.h++; B.tb += r.hit; } if (r.c === "K") B.k++;
+  if (r.c === "BB") B.bb++; if (r.c === "HBP") B.hbp++; if (r.c === "SF") B.sf++;
 }
-function finBucket(B) { B.avg = div(B.h, B.ab); B.kRate = div(B.k, B.pa); return B; }
+function finBucket(B) {
+  B.avg = div(B.h, B.ab); B.kRate = div(B.k, B.pa);
+  B.obp = div(B.h + B.bb + B.hbp, B.ab + B.bb + B.hbp + B.sf);
+  B.slg = div(B.tb, B.ab);
+  B.ops = B.obp == null || B.slg == null ? null : B.obp + B.slg;
+  B.on = B.h + B.bb + B.hbp; // 出塁した数
+  return B;
+}
+// カウントのまとまり（打者有利・不利など）
+export const COUNT_GROUPS = [
+  { k: "first", label: "初球", keys: ["0-0"] },
+  { k: "ahead", label: "打者有利", note: "1-0・2-0・3-0・2-1・3-1", keys: ["1-0", "2-0", "3-0", "2-1", "3-1"] },
+  { k: "even", label: "並行カウント", note: "1-1・2-2", keys: ["1-1", "2-2"] },
+  { k: "behind", label: "投手有利", note: "0-1・0-2・1-2", keys: ["0-1", "0-2", "1-2"] },
+  { k: "full", label: "フルカウント", note: "3-2", keys: ["3-2"] },
+];
+export function countGroup(byCount, keys) {
+  const B = bucket();
+  for (const k of keys) { const x = byCount[k]; if (!x) continue; for (const f of ["pa", "ab", "h", "k", "bb", "hbp", "sf", "tb"]) B[f] += x[f]; }
+  return finBucket(B);
+}
 
 export const COUNT_KEYS = ["0-0", "1-0", "2-0", "3-0", "0-1", "1-1", "2-1", "3-1", "0-2", "1-2", "2-2", "3-2"];
 
@@ -347,6 +369,8 @@ export function batting(games, pid, settings) {
   L.risp = finBucket(risp); L.first = finBucket(first); L.two = finBucket(two);
   COUNT_KEYS.forEach((k) => finBucket(byCount[k]));
   L.byCount = byCount;
+  L.full = byCount["3-2"]; // 3-2（フルカウント）から
+  L.groups = Object.fromEntries(COUNT_GROUPS.map((g) => [g.k, countGroup(byCount, g.keys)]));
   L.vsR = finBat(vsR); L.vsL = finBat(vsL);
   return L;
 }
@@ -545,4 +569,105 @@ export function playText(it) {
   const n = playNote(it);
   if (!(it.p || "").length) return n;
   return `${countInfo(it.p).key}から${n}`;
+}
+
+
+// ---- 打球方向（スプレー） ------------------------------------------
+// 左方向・中央・右方向（引っ張り／流しは打者の左右で決まる）
+const LEFT = ["5", "6", "7", "78"], CENTER = ["1", "2", "8"], RIGHT = ["3", "4", "9", "89"];
+export const DIR_ZONES = DIRS.map(([k]) => k);
+// side="off"：自チームの打者（pid=選手、空ならチーム全体）
+// side="def"：相手の打者（pid=自チームの投手、空なら全体）
+export function spray(games, pid, settings, side = "off") {
+  const zones = Object.fromEntries(DIR_ZONES.map((k) => [k, { n: 0, h: 0, go: 0, fo: 0, lo: 0, tb: 0 }]));
+  const T = { n: 0, h: 0, noDir: 0, left: 0, center: 0, right: 0, pull: 0, oppo: 0, mid: 0, go: 0, fo: 0, lo: 0 };
+  for (const g of games) for (const it of g.log || []) {
+    if (it.k !== "pa" || it.side !== side || !R[it.res]) continue;
+    if (pid && (side === "off" ? it.batter : it.pitcher) !== pid) continue;
+    if (!(it.p || "").toUpperCase().endsWith("X")) continue; // 打球のあった打席だけ
+    if (it.res === "K") continue;
+    T.n++;
+    const r = R[it.res];
+    if (r.hit) T.h++;
+    const type = ["GO", "DP", "SAC", "ADV", "FC"].includes(it.res) ? "go" : ["FO", "SF"].includes(it.res) ? "fo" : it.res === "LO" ? "lo" : null;
+    if (type) T[type]++;
+    const z = zones[it.dir];
+    if (!z) { T.noDir++; continue; }
+    z.n++; if (r.hit) { z.h++; z.tb += r.hit; } if (type) z[type]++;
+    const lr = LEFT.includes(it.dir) ? "left" : RIGHT.includes(it.dir) ? "right" : "center";
+    T[lr]++;
+    // 右打者は左方向が引っ張り、左打者は右方向が引っ張り
+    const bh = it.bh === "L" ? "L" : "R";
+    if (lr === "center") T.mid++;
+    else if ((lr === "left") === (bh === "R")) T.pull++; else T.oppo++;
+  }
+  T.withDir = T.n - T.noDir;
+  for (const z of Object.values(zones)) z.hRate = div(z.h, z.n);
+  T.hRate = div(T.h, T.n);
+  return { zones, T };
+}
+
+// ---- 守備 ------------------------------------------------------------
+// その時点で、どの守備位置に誰がいたか（入力時に打席へ記録。古い記録は試合のスタメンから）
+export function fieldMap(game, pitcher) {
+  const m = {};
+  (game.positions || []).forEach((pos, i) => { const pid = (game.lineup || [])[i]; if (pos && pos !== "DH" && pid) m[pos] = pid; });
+  if (pitcher) m["1"] = pitcher;
+  return m;
+}
+function whoAt(game, it, pos) {
+  if (it.fp && it.fp[pos]) return it.fp[pos];
+  if (pos === "1") return it.pitcher || game.pitcher || null;
+  return fieldMap(game, it.pitcher || game.pitcher)[pos] || null;
+}
+function posOf(game, it, pid) {
+  const m = it.fp || fieldMap(game, it.pitcher || game.pitcher);
+  return Object.keys(m).find((k) => m[k] === pid) || null;
+}
+const OUT_BY_FIELDER = ["GO", "FO", "LO", "DP", "SAC", "SF", "ADV", "FC"];
+// 守備率（簡易）＝ 処理したアウト ÷（処理したアウト＋失策）… 打球方向の記録から数えます
+export function fielding(games) {
+  const P = {}; // 選手ごと
+  const POS = {}; // 守備位置ごと
+  const team = { chances: 0, outs: 0, e: 0, eNoName: 0, sb: 0, cs: 0, pb: 0 };
+  const getP = (pid) => (P[pid] = P[pid] || { pid, outs: 0, e: 0, games: {}, sbA: 0, csC: 0, pb: 0 });
+  const getPos = (pos) => (POS[pos] = POS[pos] || { pos, outs: 0, e: 0, players: {} });
+  for (const g of games) {
+    // スタメンで守った位置（試合数）
+    const m = fieldMap(g, g.pitcher);
+    for (const [pos, pid] of Object.entries(m)) { getP(pid).games[pos] = (getP(pid).games[pos] || 0) + 1; getPos(pos).players[pid] = (getPos(pos).players[pid] || 0) + 1; }
+    for (const it of g.log || []) {
+      if (it.side !== "def") continue;
+      if (it.k === "pa" && R[it.res]) {
+        const single = /^[1-9]$/.test(it.dir || "") ? it.dir : null;
+        if (OUT_BY_FIELDER.includes(it.res) && single) {
+          const pid = whoAt(g, it, single);
+          team.outs++; getPos(single).outs++;
+          if (pid) getP(pid).outs++;
+        }
+        if (it.res === "E") {
+          team.e++;
+          const pid = it.fielder || (single ? whoAt(g, it, single) : null);
+          const pos = it.fielder ? posOf(g, it, it.fielder) || single : single;
+          if (pid) getP(pid).e++; else team.eNoName++;
+          if (pos) getPos(pos).e++;
+        }
+      }
+      if (it.k === "ev") {
+        if (it.type === "e") {
+          team.e++;
+          if (it.fielder) { getP(it.fielder).e++; const pos = posOf(g, it, it.fielder); if (pos) getPos(pos).e++; } else team.eNoName++;
+        }
+        const c = it.catcher || whoAt(g, it, "2");
+        if (it.type === "sb") { team.sb++; if (c) getP(c).sbA++; }
+        if (it.type === "cs") { team.cs++; if (c) getP(c).csC++; }
+        if (it.type === "pb") { team.pb++; if (c) getP(c).pb++; }
+      }
+    }
+  }
+  const fin = (x) => { x.fpct = div(x.outs, x.outs + x.e); return x; };
+  Object.values(P).forEach((x) => { fin(x); x.csPct = div(x.csC, x.csC + x.sbA); x.g = Object.values(x.games).reduce((a, b) => a + b, 0); });
+  Object.values(POS).forEach(fin);
+  fin(team); team.csPct = div(team.cs, team.cs + team.sb);
+  return { players: P, positions: POS, team };
 }

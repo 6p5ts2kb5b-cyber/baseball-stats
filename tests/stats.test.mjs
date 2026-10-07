@@ -193,4 +193,60 @@ t("打球方向とカウント付きの書き方", () => {
   assert.equal(S.playNote({ res: "1B" }), "安打");
   assert.equal(S.playNote({ res: "HR", dir: "78" }), "左中本");
 });
+t("3-2（フルカウント）からの出塁率とカウントのまとまり", () => {
+  const g = { id: "g", log: [
+    pa({ batter: "a", p: "BBBSSB", res: "BB" }),     // 3-2から四球
+    pa({ batter: "a", p: "BBBSSK", res: "K" }),      // 3-2から三振
+    pa({ batter: "a", p: "BBBSSFX", res: "1B" }),    // 3-2（ファウルで粘って）から安打
+    pa({ batter: "a", p: "BBBSB", res: "BB" }),      // 3-1から四球（フルカウントではない）
+    pa({ batter: "a", p: "X", res: "GO" }),          // 初球
+  ]};
+  const b = S.batting([g], "a");
+  assert.deepEqual([b.full.pa, b.full.ab, b.full.h, b.full.bb, b.full.k], [3, 2, 1, 1, 1]);
+  assert.equal(S.fmtAvg(b.full.avg), ".500");
+  assert.equal(S.fmtAvg(b.full.obp), ".667");
+  assert.equal(b.groups.ahead.pa, 1);  // 3-1
+  assert.equal(b.groups.first.pa, 1);
+  assert.equal(b.byCount["3-1"].obp, 1);
+});
+
+t("打球方向（引っ張り・流し）", () => {
+  const g = { id: "g", log: [
+    pa({ batter: "a", bh: "R", p: "X", res: "1B", dir: "7" }),   // 右打者のレフト＝引っ張り
+    pa({ batter: "a", bh: "R", p: "BX", res: "FO", dir: "9" }),  // 右打者のライト＝流し
+    pa({ batter: "a", bh: "R", p: "SX", res: "GO", dir: "1" }),  // 中央
+    pa({ batter: "a", bh: "R", p: "X", res: "2B" }),             // 方向なし
+    pa({ batter: "a", bh: "R", p: "SSS", res: "K" }),            // 打球なし
+    pa({ batter: "b", bh: "L", p: "X", res: "GO", dir: "4" }),   // 左打者の二塁ゴロ＝引っ張り
+  ]};
+  const A = S.spray([g], "a");
+  assert.deepEqual([A.T.n, A.T.h, A.T.withDir, A.T.pull, A.T.oppo, A.T.mid], [4, 2, 3, 1, 1, 1]);
+  assert.deepEqual([A.zones["7"].n, A.zones["7"].h, A.zones["9"].fo], [1, 1, 1]);
+  const B = S.spray([g], "b");
+  assert.equal(B.T.pull, 1);
+  assert.equal(S.spray([g]).T.n, 5);
+});
+
+t("守備（処理・失策・簡易守備率・盗塁阻止率）", () => {
+  const g = { id: "g", first: true, pitcher: "P", lineup: ["s", "c", "f"], positions: ["6", "2", "3"], log: [
+    { k: "pa", side: "def", pitcher: "P", p: "X", res: "GO", dir: "6" },
+    { k: "pa", side: "def", pitcher: "P", p: "X", res: "FO", dir: "6" },
+    { k: "pa", side: "def", pitcher: "P", p: "X", res: "E", dir: "6" },                // 方向から遊撃手の失策
+    { k: "pa", side: "def", pitcher: "P", p: "X", res: "GO", dir: "1" },               // 投手
+    { k: "pa", side: "def", pitcher: "P", p: "X", res: "GO", dir: "6", fp: { "6": "z" } }, // 途中交代した遊撃手z
+    { k: "ev", side: "def", pitcher: "P", type: "cs" },
+    { k: "ev", side: "def", pitcher: "P", type: "sb" },
+    { k: "ev", side: "def", pitcher: "P", type: "e", fielder: "f" },
+  ]};
+  const F = S.fielding([g]);
+  assert.deepEqual([F.players.s.outs, F.players.s.e], [2, 1]);
+  assert.equal(F.players.s.fpct, 2 / 3);
+  assert.equal(F.players.z.outs, 1);
+  assert.equal(F.players.P.outs, 1);
+  assert.equal(F.players.f.e, 1);
+  assert.equal(F.players.c.csPct, 0.5);
+  assert.deepEqual([F.positions["6"].outs, F.positions["6"].e, F.positions["3"].e], [3, 1, 1]);
+  assert.deepEqual([F.team.outs, F.team.e], [4, 2]);
+  assert.equal(F.players.s.games["6"], 1);
+});
 console.log(`\nすべて成功（${n}件）`);

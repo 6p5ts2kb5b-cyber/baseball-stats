@@ -3,7 +3,9 @@
 // =====================================================================
 import { state } from "../store.js";
 import { esc, $, player, numberOf, gradeText, activePlayers, filterBar, bindFilter, loadFilter, filteredGames, filterLabel, sortableTable, download, toCSV, HAND, liveGames } from "../ui.js";
-import { batting, pitching, pitcherLines, fmtAvg, fmtPct, fmtNum, COUNT_KEYS, R } from "../stats.js";
+import { batting, pitching, pitcherLines, fmtAvg, fmtPct, fmtNum, COUNT_KEYS, R, COUNT_GROUPS, countGroup, spray, fielding } from "../stats.js";
+import { countPanel, bindCountPanels, sprayChart, pullBar, sprayTable } from "./charts.js";
+import { POSFULL } from "../ui.js";
 
 const F = loadFilter();
 let bSort = { k: "avg", asc: false }, pSort = { k: "outs", asc: false };
@@ -74,13 +76,6 @@ export function viewPitching() {
 }
 
 // ---- 選手ページ ----
-function countGrid(byCount, label) {
-  const cell = (b, s) => { const x = byCount[`${b}-${s}`]; return `<div class="c"><b>${fmtAvg(x.avg)}</b><span>${x.h}/${x.ab}</span></div>`; };
-  return `<div class="cgrid" aria-label="${label}">
-    <div></div>${[0, 1, 2, 3].map((b) => `<div class="h">${b}ボール</div>`).join("")}
-    ${[0, 1, 2].map((s) => `<div class="h">${s}ストライク</div>${[0, 1, 2, 3].map((b) => cell(b, s)).join("")}`).join("")}
-  </div><p class="muted small">上の数字＝${label}、下＝安打/打数。最後の1球を投げる直前のカウントで集計。</p>`;
-}
 const sitRow = (label, x) => `<tr><td class="l">${label}</td><td>${x.pa}</td><td>${x.ab}</td><td>${x.h}</td><td>${fmtAvg(x.avg)}</td><td>${x.k}</td><td>${fmtPct(x.kRate)}</td></tr>`;
 
 export function viewPlayer(pid) {
@@ -95,7 +90,7 @@ export function viewPlayer(pid) {
   // 試合ごとの投球（QS表示）
   const pgames = pitched ? gs.filter((g) => pitcherLines(g, state.settings).lines[pid]).sort((a, c) => (a.no ?? 0) - (c.no ?? 0)) : [];
   const html = `
-    <div class="row noprint"><a href="#/batting" class="btn sm">‹ 成績一覧</a></div>
+    <div class="row noprint"><a href="#/batting" class="btn sm">‹ 成績一覧</a><span class="grow"></span><a href="#/analysis/compare/${pid}" class="btn sm">⇄ ほかの選手・期間とくらべる</a></div>
     <h1>${esc(p.name)} <span class="muted" style="font-size:15px">${numberOf(p) !== "" ? "#" + esc(numberOf(p)) : ""} ${esc(gradeText(p))} ${esc(p.pos || "")} ${HAND[p.throws] || ""}投${HAND[p.bats] || ""}打</span></h1>
     ${filterBar(F)}
     <p><strong>${esc(filterLabel(F))}</strong></p>
@@ -117,8 +112,17 @@ export function viewPlayer(pid) {
     <h2>対右投手・対左投手</h2>
     <div class="tablewrap"><table><thead><tr><th class="l"></th><th>打席</th><th>打数</th><th>安打</th><th>本塁打</th><th>三振</th><th>打率</th><th>OPS</th></tr></thead><tbody>
       <tr><td class="l">対右投手</td>${lr(b.vsR)}</tr><tr><td class="l">対左投手</td>${lr(b.vsL)}</tr></tbody></table></div>
-    <h2>カウント別打率</h2>
-    ${countGrid(b.byCount, "打率")}
+    <h2>カウント別の成績</h2>
+    ${countPanel(b.byCount, b.groups, { id: "pb" })}
+    <h2>打球方向</h2>
+    ${(() => { const sp = spray(gs, pid, state.settings); return sp.T.withDir ? `<div class="two-col"><div class="card">${sprayChart(sp, { title: p.name + "の打球方向" })}<p class="muted small" style="text-align:center;margin:0">数字＝打球の数、下＝そのうち安打</p></div><div class="stack"><div class="card stack"><strong>左・中・右の割合</strong>${pullBar(sp.T)}</div>${sprayTable(sp)}</div></div>` : `<p class="muted">打球方向を記録した打球がまだありません。</p>`; })()}
+    <h2>守備</h2>
+    ${(() => { const f = fielding(gs).players[pid]; if (!f || !(f.g || f.outs || f.e)) return `<p class="muted">守備の記録がありません。</p>`;
+      return `<div class="tiles"><div class="tile"><div class="k">守った位置</div><div class="v" style="font-size:16px">${Object.entries(f.games).sort((a, c) => c[1] - a[1]).map(([k, n]) => `${POSFULL[k] || k} ${n}`).join("<br>") || "-"}</div></div>
+        <div class="tile"><div class="k">打球の処理</div><div class="v">${f.outs}</div></div><div class="tile"><div class="k">失策</div><div class="v">${f.e}</div></div>
+        <div class="tile"><div class="k">守備率（簡易）</div><div class="v">${f.fpct == null ? "-" : fmtAvg(f.fpct)}</div></div>
+        ${f.csC + f.sbA ? `<div class="tile"><div class="k">盗塁阻止率</div><div class="v">${fmtPct(f.csPct)}</div></div>` : ""}</div>
+        <p class="muted small">守備率（簡易）＝打球の処理 ÷（処理＋失策）。くわしくは「分析」→「守備」。</p>`; })()}
     ${pitched ? `
       <h2>投手成績</h2>
       <div class="tiles">
@@ -133,12 +137,12 @@ export function viewPlayer(pid) {
       <h3>対右打者・対左打者</h3>
       <div class="tablewrap"><table><thead><tr><th class="l"></th><th>打者</th><th>打数</th><th>被安打</th><th>奪三振</th><th>四死球</th><th>被打率</th><th>初球S率</th></tr></thead><tbody>
         <tr><td class="l">対右打者</td>${plr(pit.vsR)}</tr><tr><td class="l">対左打者</td>${plr(pit.vsL)}</tr></tbody></table></div>
-      <h3>カウント別被打率</h3>
-      ${countGrid(pit.byCount, "被打率")}
+      <h3>カウント別の被打率</h3>
+      ${countPanel(pit.byCount, Object.fromEntries(COUNT_GROUPS.map((g) => [g.k, countGroup(pit.byCount, g.keys)])), { id: "pp", pitcher: true })}
       <h3>登板した試合</h3>
       <div class="tablewrap"><table><thead><tr><th class="l">試合</th><th>投球回</th><th>打者</th><th>球数</th><th>S率</th><th>初球S率</th><th>被安打</th><th>奪三振</th><th>失点</th><th>自責</th><th>QS</th></tr></thead><tbody>
         ${pgames.map((g) => { const L = pitcherLines(g, state.settings).lines[pid]; return `<tr><td class="l"><a href="#/game/${g.id}">第${g.no}試合 vs ${esc(g.opponent)}</a>${L.starter ? ' <span class="muted small">先発</span>' : ""}</td><td>${L.ipText}</td><td>${L.bf}</td><td><b>${L.pitches}</b></td><td>${fmtPct(L.strikePct)}</td><td>${fmtPct(L.fpsPct)}</td><td>${L.h}</td><td>${L.k}</td><td>${L.runs}</td><td>${L.er}</td><td>${L.starter ? (L.qs ? '<span class="chip qs">QS ○</span>' : "×") : "-"}</td></tr>`; }).join("")}
       </tbody></table></div>` : ""}`;
-  return { html, after: (root) => bindFilter(root, F, rerender) };
+  return { html, after: (root) => { bindFilter(root, F, rerender); bindCountPanels(root, rerender); } };
 }
 export { activePlayers, liveGames, COUNT_KEYS };
